@@ -1,0 +1,4 @@
+[submodule "bk_idk"]
+	path = bk_idk
+	url = git@gitlab.bekencorp.com:armino/bk_dashcam/bk_idk_dashcam.git
+	branch = dashcam_release/v2.0.1
