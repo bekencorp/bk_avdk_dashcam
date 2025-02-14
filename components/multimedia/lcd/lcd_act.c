@@ -1799,11 +1799,19 @@ void lcd_event_handle(media_mailbox_msg_t *msg)
 	{
 		case EVENT_LCD_OPEN_IND:
 			LOGI("%s EVENT_LCD_OPEN_IND \n", __func__);
+#if CONFIG_MEDIA_RECEIVE_DEMO
+			ret = lcd_open_jpeg_decode_frame_handle(msg, lcd_info.rotate);
+#else
 			ret = lcd_open_handle(msg);
+#endif
 			break;
 		case EVENT_LCD_CLOSE_IND:
 			LOGI(" %s EVENT_LCD_CLOSE_IND \n", __func__);
+#if CONFIG_MEDIA_RECEIVE_DEMO
+			ret = lcd_close_jpeg_decode_frame_handle(msg);
+#else
 			ret = lcd_close_handle(msg);
+#endif
 			break;
 
 		case EVENT_LCD_ROTATE_ENABLE_IND:

@@ -28,13 +28,8 @@ if (CONFIG_ASDF_AUTO_TEST_EVENT)
 		auto_test/audio_event_iface_test.c
 	)
 endif()
-endif()#(CONFIG_SYS_CPU1 AND CONFIG_ASDF_WORK_CPU1)
+endif()#(CONFIG_SYS_CPU1 AND CONFIG_ASDF_WORK_CPU1) OR (CONFIG_SYS_CPU0 AND CONFIG_ASDF_WORK_CPU0)
 
-if ((CONFIG_SYS_CPU0 AND CONFIG_ASDF_WORK_CPU1))
-	list(APPEND srcs
-		audio_coprocess.c
-		audio_mailbox.c
-	)
-endif()
 
-armino_component_register(SRCS "${srcs}" INCLUDE_DIRS "${incs}" PRIV_REQUIRES bk_common multimedia fatfs_stream)
+
+armino_component_register(SRCS "${srcs}" INCLUDE_DIRS "${incs}" PRIV_REQUIRES bk_common)

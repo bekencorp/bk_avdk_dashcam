@@ -29,6 +29,11 @@ typedef struct
 	media_storage_state_t capture_state;
 	frame_buffer_t *frame;
 	uint32_t param;
+    uint8_t auto_save;
+    uint8_t first_save;
+    uint32_t save_count;
+    uint32_t cycle_count;
+    beken_timer_t auto_time;
 } storage_info_t;
 
 typedef struct
@@ -53,6 +58,7 @@ typedef enum
 } storage_task_evt_t;
 
 bk_err_t storage_app_set_frame_name(char *name);
+bk_err_t storage_app_set_frame_auto(uint32_t cycle_count, uint32_t cycle_time);
 media_storage_state_t get_storage_state(void);
 void set_storage_state(media_storage_state_t state);
 void storage_init(void);

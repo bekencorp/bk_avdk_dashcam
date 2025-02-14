@@ -26,6 +26,12 @@ extern "C" {
 #include "lcd_act.h"
 
 typedef enum {
+	DISPLAY_FRAME_REQUEST,
+	DISPLAY_FRAME_FREE,
+	DISPLAY_FRAME_EXTI,
+} lcd_display_msg_type_t;
+
+typedef enum {
 	H264_ENCODE_START = 0,
 	H264_ENCODE_LINE_DONE,
 	H264_ENCODE_FINISH,
@@ -74,9 +80,12 @@ typedef enum {
 	SCALE_RESET,
 } scale_msg_type_t;
 
+typedef void (*decode_callback_t)(uint8_t ret);
+
 typedef struct {
 	frame_buffer_t *in_frame;
 	frame_buffer_t *out_frame;
+	decode_callback_t cb;
 } media_software_decode_info_t;
 
 bk_err_t h264_encode_task_send_msg(uint8_t type, uint32_t param);

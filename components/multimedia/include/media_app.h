@@ -85,6 +85,7 @@ bk_err_t media_app_lcd_close(void);
 bk_err_t media_app_storage_enable(app_camera_type_t type, uint8_t enable);
 bk_err_t media_app_capture(char *name);
 bk_err_t media_app_save_start(char *name);
+bk_err_t media_app_save_auto(uint32_t cycle_count, uint32_t cycle_time);
 bk_err_t media_app_save_stop(void);
 bk_err_t media_app_lcd_set_backlight(uint8_t level);
 bk_err_t media_app_mailbox_test(void);
@@ -147,6 +148,7 @@ bk_err_t media_app_pipeline_mem_leak(void);
 
 bk_err_t media_app_frame_buffer_init(fb_type_t type);
 frame_buffer_t *media_app_frame_buffer_jpeg_malloc(void);
+frame_buffer_t *media_app_frame_buffer_small_jpeg_malloc(void);
 frame_buffer_t *media_app_frame_buffer_h264_malloc(void);
 bk_err_t media_app_frame_buffer_push(frame_buffer_t *frame);
 bk_err_t media_app_frame_buffer_clear(frame_buffer_t *frame);

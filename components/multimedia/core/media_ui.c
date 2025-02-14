@@ -169,40 +169,59 @@ static void media_ui_major_common_event_handle(uint32_t event)
 static void media_ui_frame_buffer_event_handle(media_mailbox_msg_t *msg)
 {
 	int ret = BK_FAIL;
-	frame_buffer_t *new_frame = (frame_buffer_t *)msg->param;
-	frame_buffer_t **alloc_frame = (frame_buffer_t **)msg->param;
 	switch (msg->event)
 	{
 		case EVENT_FRAME_BUFFER_INIT_IND:
+			media_debug->isr_jpeg = 0;
 			frame_buffer_fb_init((fb_type_t)msg->param);
 			ret = BK_OK;
 			break;
 
-		case EVENT_FRAME_BUFFER_JPEG_MALLOC_IND:
-			*alloc_frame = frame_buffer_fb_malloc(FB_INDEX_JPEG, CONFIG_JPEG_FRAME_SIZE);
-			if (*alloc_frame != NULL)
+		case EVENT_FRAME_BUFFER_MALLOC_IND:
+		{
+			frame_buffer_t *malloc_frame = NULL;
+			if (msg->param == FB_INDEX_JPEG)
+			{
+				malloc_frame = frame_buffer_fb_malloc((fb_type_t)msg->param, CONFIG_JPEG_FRAME_SIZE);
+			}
+			else if (msg->param == FB_INDEX_H264)
+			{
+				malloc_frame = frame_buffer_fb_malloc((fb_type_t)msg->param, CONFIG_H264_FRAME_SIZE);
+			}
+#if CONFIG_SMALL_JPEG_FRAME_SIZE
+			else
+			{
+				malloc_frame = frame_buffer_fb_malloc((fb_type_t)msg->param, CONFIG_SMALL_JPEG_FRAME_SIZE);
+			}
+#endif
+			if (malloc_frame != NULL)
 			{
 				ret = BK_OK;
+				msg->param = (uint32_t)malloc_frame;
 			}
-			break;
-
-		case EVENT_FRAME_BUFFER_H264_MALLOC_IND:
-			*alloc_frame = frame_buffer_fb_malloc(FB_INDEX_H264, CONFIG_H264_FRAME_SIZE);
-			if (*alloc_frame != NULL)
+			else
 			{
-				ret = BK_OK;
+				msg->param = 0;
 			}
 			break;
+		}
 
 		case EVENT_FRAME_BUFFER_PUSH_IND:
+		{
+			frame_buffer_t *new_frame = (frame_buffer_t *)msg->param;
+			media_debug->fps_wifi++;
+			media_debug->jpeg_length = new_frame->length;
 			frame_buffer_fb_push(new_frame);
 			ret = BK_OK;
 			break;
-
+		}
 		case EVENT_FRAME_BUFFER_FREE_IND:
+		{
+			frame_buffer_t *new_frame = (frame_buffer_t *)msg->param;
 			frame_buffer_fb_direct_free(new_frame);
 			ret = BK_OK;
 			break;
+		}
 
 		default:
 			break;
@@ -366,7 +385,7 @@ bk_err_t media_ui_task_init(void)
 		}
 
 		ret = rtos_create_thread(&media_ui_task,
-								BEKEN_DEFAULT_WORKER_PRIORITY,
+								BEKEN_DEFAULT_WORKER_PRIORITY - 1,
 								"media_ui_task",
 								(beken_thread_function_t)media_ui_task_main,
 								CONFIG_MEDIA_UI_TASK_STACK_SIZE,

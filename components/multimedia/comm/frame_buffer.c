@@ -49,7 +49,7 @@ extern uint32_t  platform_is_in_interrupt_context(void);
 
 fb_info_t *fb_info = NULL;
 fb_mem_list_t fb_mem_list[FB_INDEX_MAX] = {0};
-uint8_t fb_count[FB_INDEX_MAX] = {5, 4, 8, H265_GOP_FRAME_CNT * 2};
+uint8_t fb_count[FB_INDEX_MAX] = {5, 4, 8, 6};
 
 fb_mem_list_t *frame_buffer_list_get(pixel_format_t fmt)
 {

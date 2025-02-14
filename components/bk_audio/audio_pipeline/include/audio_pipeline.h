@@ -16,9 +16,6 @@
 #define _AUDIO_PIPELINE_H_
 
 #include "audio_element.h"
-#if CONFIG_SYS_CPU1
-#include "audio_coprocess.h"
-#endif
 
 #ifdef __cplusplus
 extern "C" {

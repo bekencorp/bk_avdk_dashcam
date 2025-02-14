@@ -1089,6 +1089,25 @@ bk_err_t media_app_capture(char *name)
 	return ret;
 }
 
+bk_err_t media_app_save_auto(uint32_t cycle_count, uint32_t cycle_time)
+{
+	int ret = BK_OK;
+
+	media_app_storage_enable(APP_CAMERA_DVP_H264_LOCAL, 1);
+
+	ret = storage_app_set_frame_auto(cycle_count, cycle_time);
+	if (ret != BK_OK)
+	{
+		return ret;
+	}
+
+	ret = media_send_msg_sync(EVENT_STORAGE_SAVE_START_IND, 0);
+
+	LOGI("%s complete\n", __func__);
+
+	return ret;
+}
+
 bk_err_t media_app_save_start(char *name)
 {
 	int ret = BK_OK;
@@ -1267,12 +1286,6 @@ bk_err_t media_app_frame_buffer_init(fb_type_t type)
 {
 	int ret = BK_FAIL;
 
-	if (CAMERA_STATE_DISABLED == media_modules_state->cam_state)
-	{
-		LOGI("%s camera not opened\n", __func__);
-		return ret;
-	}
-
 	ret = media_send_msg_sync(EVENT_FRAME_BUFFER_INIT_IND, (uint32_t)type);
 
 	if (ret != BK_OK)
@@ -1283,23 +1296,40 @@ bk_err_t media_app_frame_buffer_init(fb_type_t type)
 	return ret;
 }
 
-frame_buffer_t *media_app_frame_buffer_jpeg_malloc(void)
+frame_buffer_t *media_app_frame_buffer_malloc(fb_type_t type)
 {
 	int ret = BK_FAIL;
 	frame_buffer_t *frame = NULL;
 
-	if (CAMERA_STATE_DISABLED == media_modules_state->cam_state)
-	{
-		LOGI("%s camera not opened!\n", __func__);
-		return frame;
-	}
-
-	ret = media_send_msg_sync(EVENT_FRAME_BUFFER_JPEG_MALLOC_IND, (uint32_t)&frame);
+	ret = media_send_msg_sync_return_param(EVENT_FRAME_BUFFER_MALLOC_IND, type, (uint32_t *)&frame);
 
 	if (ret != BK_OK)
 	{
-		LOGE("%s, malloc fail\r\n", __func__);
+		LOGE("%s, malloc fail %d\r\n", __func__, type);
 	}
+
+	LOGD("%s, %p\r\n", __func__, frame);
+
+	return frame;
+}
+
+frame_buffer_t *media_app_frame_buffer_jpeg_malloc()
+{
+	frame_buffer_t *frame = NULL;
+
+	frame = media_app_frame_buffer_malloc(FB_INDEX_JPEG);
+
+	if (frame)
+		frame->fmt = PIXEL_FMT_JPEG;
+
+	return frame;
+}
+
+frame_buffer_t *media_app_frame_buffer_small_jpeg_malloc(void)
+{
+	frame_buffer_t *frame = NULL;
+
+	frame = media_app_frame_buffer_malloc(FB_INDEX_SMALL_JPEG);
 
 	LOGD("%s, %p\r\n", __func__, frame);
 
@@ -1311,21 +1341,9 @@ frame_buffer_t *media_app_frame_buffer_jpeg_malloc(void)
 
 frame_buffer_t *media_app_frame_buffer_h264_malloc(void)
 {
-	int ret = BK_FAIL;
 	frame_buffer_t *frame = NULL;
 
-	if (CAMERA_STATE_DISABLED == media_modules_state->cam_state)
-	{
-		LOGI("%s camera not opened!\n", __func__);
-		return frame;
-	}
-
-	ret = media_send_msg_sync(EVENT_FRAME_BUFFER_H264_MALLOC_IND, (uint32_t)&frame);
-
-	if (ret != BK_OK)
-	{
-		LOGE("%s, malloc fail\r\n", __func__);
-	}
+	frame = media_app_frame_buffer_malloc(FB_INDEX_H264);
 
 	if (frame)
 		frame->fmt = PIXEL_FMT_H264;
@@ -1337,12 +1355,6 @@ bk_err_t media_app_frame_buffer_push(frame_buffer_t *frame)
 {
 	int ret = BK_FAIL;
 
-	if (CAMERA_STATE_DISABLED == media_modules_state->cam_state)
-	{
-		LOGI("%s camera not opened!\n", __func__);
-		return ret;
-	}
-
 	ret = media_send_msg_sync(EVENT_FRAME_BUFFER_PUSH_IND, (uint32_t)frame);
 
 	return ret;
@@ -1351,12 +1363,6 @@ bk_err_t media_app_frame_buffer_push(frame_buffer_t *frame)
 bk_err_t media_app_frame_buffer_clear(frame_buffer_t *frame)
 {
 	int ret = BK_FAIL;
-
-	if (CAMERA_STATE_DISABLED == media_modules_state->cam_state)
-	{
-		LOGI("%s camera not opened!\n", __func__);
-		return ret;
-	}
 
 	ret = media_send_msg_sync(EVENT_FRAME_BUFFER_FREE_IND, (uint32_t)frame);
 

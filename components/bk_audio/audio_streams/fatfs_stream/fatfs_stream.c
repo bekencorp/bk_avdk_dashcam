@@ -22,7 +22,8 @@
 #include "audio_common.h"
 #include "audio_mem.h"
 #include "audio_element.h"
-#include "fatfs_act.h"
+#include "ff.h"
+#include "diskio.h"
 
 
 #define TAG  "FTFS_STR"
@@ -32,9 +33,90 @@ typedef struct fatfs_stream {
     int block_size;
     bool is_open;
     void *file;
-//    bool write_header;
-	void *coprocess_hdl;		/**< coprocess cpu handle */
 } fatfs_stream_t;
+
+static bk_err_t fatfs_open(void **fp, char* path, uint8_t mode)
+{
+	FRESULT fr;
+
+	FIL *fp_open = os_malloc(sizeof(FIL));
+	if (!fp_open) {
+		BK_LOGE(TAG, "%s calloc fp_open fail, line: %d \n", __func__, __LINE__);
+		return BK_FAIL;
+	}
+	os_memset(fp_open, 0x00, sizeof(FIL));
+	*fp = fp_open;
+	BK_LOGI(TAG, "[%s] %s fatfs open ok, fp: %p. line: %d \n", tag, __func__, *fp, __LINE__);
+
+	fr = f_open(*fp, path, mode);
+	if (fr != BK_OK) {
+		BK_LOGE(TAG, "Failed to open. File name: %s, error: %d, line: %d \n", path, fr, __LINE__);
+		return BK_FAIL;
+	}
+
+	return BK_OK;
+}
+
+static bk_err_t fatfs_size(void *fp)
+{
+	return f_size((FIL *)fp);
+}
+
+static bk_err_t fatfs_lseek(void *fp, uint64_t ofs)
+{
+	int ret = f_lseek((FIL *)fp, ofs);
+	if (ret < 0)
+		BK_LOGE(TAG, "%s fail seek file. Error: %s, line: %d \n", __func__, f_error((FIL *)fp), __LINE__);
+	return ret;
+}
+
+static int fatfs_read(void *fp, void* buff, uint64_t len)
+{
+	FRESULT fr;
+	int ret = 0;
+	/* use file descriptors to access files */
+	uint32 rlen = 0;
+	fr = f_read((FIL *)fp, buff, len, &rlen);
+	if (fr == BK_OK) {
+		ret = rlen;
+	}else {
+		BK_LOGE(TAG, "%s The error is happened in reading data. Error: %s, line: %d \n", __func__, f_error((FIL *)fp), __LINE__);
+		ret = -1;
+	}
+	return ret;
+}
+
+static int fatfs_write(void *fp, void* buff, uint64_t len)
+{
+	FRESULT fr;
+	int ret = 0;
+	uint32 wlen = 0;
+	fr = f_write((FIL *)fp, buff, len, &wlen);
+	fr = BK_OK;
+	if (fr == BK_OK) {
+		ret = wlen;
+		if (ret != len) {
+			BK_LOGE(TAG, "%s len: %d, wlen: %d \n", __func__, len, wlen);
+		}
+	} else {
+		BK_LOGE(TAG, "%s writing data error. Error: %s, line: %d \n", __func__, f_error((FIL *)fp), __LINE__);
+		ret = -1;
+	}
+	return ret;
+}
+
+static bk_err_t fatfs_close(void *fp)
+{
+	FRESULT fr = f_close((FIL*)fp);
+	if (fr == BK_OK) {
+		BK_LOGI(TAG, "[%s] %s fatfs close ok, fp: %p. line: %d \n", tag, __func__, fp, __LINE__);
+		os_free((FIL*)fp);
+		return BK_OK;
+	} else {
+		BK_LOGE(TAG, "[%s] %s Failed to fatfs close, ret: %d. line: %d \n", tag, __func__, fr, __LINE__);
+		return BK_FAIL;
+	}
+}
 
 static bk_err_t _fatfs_open(audio_element_handle_t self)
 {
@@ -59,20 +141,20 @@ static bk_err_t _fatfs_open(audio_element_handle_t self)
         return BK_FAIL;
     }
     if (fatfs->type == AUDIO_STREAM_READER) {
-        ret = fatfs_open(&fatfs->file, path, 0x01, fatfs->coprocess_hdl, audio_element_get_tag(self));
+        ret = fatfs_open(&fatfs->file, path, 0x01);
         if (ret != BK_OK) {
             BK_LOGE(TAG, "Failed to open. File name: %s, error: %d, line: %d \n", path, ret, __LINE__);
             return BK_FAIL;
         }
-		info.total_bytes = (int64_t)fatfs_size(fatfs->file, fatfs->coprocess_hdl, audio_element_get_tag(self));
+		info.total_bytes = (int64_t)fatfs_size(fatfs->file);
         BK_LOGI(TAG, "File size: 0x%x%x byte, file position: 0x%x%x \n", (int)(info.total_bytes>>32), (int)info.total_bytes, (int)(info.byte_pos>>32), (int)info.byte_pos);
         if (info.byte_pos > 0) {
-            if (fatfs_lseek(fatfs->file, info.byte_pos, fatfs->coprocess_hdl, audio_element_get_tag(self)) < 0) {
+            if (fatfs_lseek(fatfs->file, info.byte_pos) < 0) {
                 return BK_FAIL;
             }
         }
     } else if (fatfs->type == AUDIO_STREAM_WRITER) {
-        ret = fatfs_open(&fatfs->file, path, 0x08 | 0x02, fatfs->coprocess_hdl, audio_element_get_tag(self));
+        ret = fatfs_open(&fatfs->file, path, 0x08 | 0x02);
         if (ret != BK_OK) {
             BK_LOGE(TAG, "[%s] Failed to open: %s, error: %d, line: %d \n", audio_element_get_tag(self), path, ret, __LINE__);
             return BK_FAIL;
@@ -96,7 +178,7 @@ static int _fatfs_read(audio_element_handle_t self, char *buffer, int len, TickT
 
 	BK_LOGD(TAG, "[%s] read len=%d, pos=%d/%d \n", audio_element_get_tag(self), len, (int)info.byte_pos, (int)info.total_bytes);
 	/* use file descriptors to access files */
-	int rlen = fatfs_read(fatfs->file, buffer, len, fatfs->coprocess_hdl, audio_element_get_tag(self));
+	int rlen = fatfs_read(fatfs->file, buffer, len);
 	if (rlen == 0) {
 		BK_LOGW(TAG, "No more data, ret:%d \n", rlen);
 	} else {
@@ -111,7 +193,7 @@ static int _fatfs_write(audio_element_handle_t self, char *buffer, int len, Tick
 	audio_element_info_t info;
 	audio_element_getinfo(self, &info);
 	BK_LOGD(TAG, "[%s] _fatfs_write len: %d \n", audio_element_get_tag(self), len);
-	int wlen = fatfs_write(fatfs->file, buffer, len, fatfs->coprocess_hdl, audio_element_get_tag(self));
+	int wlen = fatfs_write(fatfs->file, buffer, len);
 	if (wlen > 0) {
 		audio_element_update_byte_pos(self, wlen);
 	}
@@ -136,7 +218,8 @@ static bk_err_t _fatfs_close(audio_element_handle_t self)
     fatfs_stream_t *fatfs = (fatfs_stream_t *)audio_element_getdata(self);
 
     if (fatfs->is_open) {
-        fatfs_close(fatfs->file, fatfs->coprocess_hdl, audio_element_get_tag(self));
+        fatfs_close(fatfs->file);
+        fatfs->file = NULL;
         fatfs->is_open = false;
     }
     if (AEL_STATE_PAUSED != audio_element_get_state(self)) {
@@ -151,9 +234,6 @@ static bk_err_t _fatfs_destroy(audio_element_handle_t self)
 	BK_LOGI(TAG, "[%s] %s \n", audio_element_get_tag(self), __func__);
 
 	fatfs_stream_t *fatfs = (fatfs_stream_t *)audio_element_getdata(self);
-	if (BK_OK != fatfs_deinit(fatfs->coprocess_hdl, audio_element_get_tag(self))) {
-		return BK_FAIL;
-	}
 
 	if (fatfs) {
 		audio_free(fatfs);
@@ -194,15 +274,6 @@ audio_element_handle_t fatfs_stream_init(fatfs_stream_cfg_t *config)
 
     AUDIO_MEM_CHECK(TAG, el, goto _fatfs_init_exit);
     audio_element_setdata(el, fatfs);
-
-	if (BK_OK != fatfs_init(2048, 5, &(fatfs->coprocess_hdl), "file")) {
-		BK_LOGE(TAG, "[%s] fatfs_init fail \n", __func__);
-		goto _fatfs_init_exit;
-	}
-#if CONFIG_SYS_CPU1
-	audio_element_coprocess_ctx_t *coprocess_ctx = (audio_element_coprocess_ctx_t *)fatfs->coprocess_hdl;
-	BK_LOGD(TAG, "coprocess_ctx: %p, msg_que: %p \n", (audio_element_coprocess_ctx_t *)fatfs->coprocess_hdl, coprocess_ctx->audio_element_coprocess_msg_que);
-#endif
 
     return el;
 _fatfs_init_exit:

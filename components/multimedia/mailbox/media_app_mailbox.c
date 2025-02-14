@@ -34,7 +34,6 @@
 
 #include "aud_tras_drv.h"
 #include "aud_tras.h"
-#include "audio_coprocess.h"
 #include "storage_act.h"
 #include "lcd_act.h"
 #include "camera_driver.h"
@@ -499,13 +498,16 @@ static void media_app_mailbox_msg_handle(media_mailbox_msg_t *msg)
 #endif
 			}
 			break;
+
 			case EVENT_MEDIA_DATA_NOTIFY:
 				transfer_app_event_handle(msg);
 				break;
 
+#ifdef CONFIG_USB_TRANSFER
 			case EVENT_USB_DATA_NOTIFY:
 				usb_app_event_handle(msg);
 				break;
+#endif
 
 			case EVENT_VID_CAPTURE_NOTIFY:
 			case EVENT_VID_SAVE_ALL_NOTIFY:
@@ -540,20 +542,6 @@ static void media_app_mailbox_msg_handle(media_mailbox_msg_t *msg)
 			default:
 				break;
 		}
-#if CONFIG_ASDF_WORK_CPU1
-		/* audio message handle */
-		if (msg->event >> MEDIA_EVT_BIT == AUD_EVENT)
-		{
-			audio_msg_t audio_msg;
-			audio_msg.event = msg->event;
-			audio_msg.param = (uint32_t)msg;
-			ret = audio_coprocess_send_msg(&audio_msg);
-			if (ret != BK_OK)
-			{
-				LOGE("%s send msg to audio coprocessor fail: %d\n", __func__, ret);
-			}
-		}
-#endif
 	}
 	else if(msg->type == MAILBOX_MSG_TYPE_RSP) //set semaphore from cpu0 other threads and delete from rsp list
 	{
@@ -631,9 +619,6 @@ static void media_app_mailbox_message_handle(void)
 	LOGI("%s\n", __func__);
 	media_app_mailbox_inited = 1;
 
-#if (CONFIG_ASDF_WORK_CPU1)
-	audio_coprocess_task_init();
-#endif
 	rtos_set_semaphore(&media_app_mailbox_init_sem);
 
 	while (1)

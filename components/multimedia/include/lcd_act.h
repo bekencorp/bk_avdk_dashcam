@@ -147,8 +147,6 @@ void lcd_init(void);
 
 //void lcd_jpeg_dec_sw(uint32_t param);
 
-
-
 void lcd_decoder_task_stop(void);
 void camera_display_task_stop(void);
 void camera_display_task_start(media_rotate_t rotate);
@@ -163,6 +161,9 @@ frame_buffer_t *lcd_driver_decoder_frame(frame_buffer_t *frame, media_decode_mod
 bk_err_t lcd_display_echo_event_handle(media_mailbox_msg_t *msg);
 frame_buffer_t *lcd_driver_scale_frame(frame_buffer_t *frame, media_ppi_t ppi);
 
+bk_err_t lcd_open_jpeg_decode_frame_handle(media_mailbox_msg_t *msg, media_rotate_t rotate);
+bk_err_t lcd_close_jpeg_decode_frame_handle(media_mailbox_msg_t *msg);
+bool check_lcd_sw_decode_act_is_open(void);
 
 #ifdef __cplusplus
 }

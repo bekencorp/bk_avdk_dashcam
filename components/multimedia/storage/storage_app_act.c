@@ -280,12 +280,13 @@ bk_err_t storage_mem_to_sdcard(char *filename, uint8_t *paddr, uint32_t total_le
 	return BK_OK;
 }
 
-static void  storage_save_frame(frame_buffer_t *frame)
+static bk_err_t storage_save_frame(frame_buffer_t *frame)
 {
 #if (CONFIG_FATFS)
 	FIL fp1;
 	unsigned int uiTemp = 0;
 	char file_name[50] = {0};
+    LOGD("%s %d %d %s\n", __func__, __LINE__, frame->sequence, capture_name);
 
 	sprintf(file_name, "%d:/%s", DISK_NUMBER_SDIO_SD, capture_name);
 
@@ -293,7 +294,7 @@ static void  storage_save_frame(frame_buffer_t *frame)
 	if (fr != FR_OK)
 	{
 		LOGE("can not open file: %s, error: %d\n", file_name, fr);
-		return;
+		return BK_FAIL;
 	}
 
 	fr = f_write(&fp1, (char *)frame->frame, frame->length, &uiTemp);
@@ -302,6 +303,86 @@ static void  storage_save_frame(frame_buffer_t *frame)
 		LOGE("f_write failed 1 fr = %d\r\n", fr);
 	}
 	f_close(&fp1);
+    return BK_OK;
+#endif
+}
+
+static FATFS *pfs = NULL;
+
+FRESULT stroage_mount_sdcard(DISK_NUMBER number)
+{
+    FRESULT fr = FR_DISK_ERR;
+    char cFileName[50];
+
+    if (pfs != NULL)
+    {
+        os_free(pfs);
+    }
+
+    pfs = os_malloc(sizeof(FATFS));
+	if(NULL == pfs)
+	{
+		LOGE("f_mount malloc failed!\r\n");
+		goto failed_mount;
+	}
+
+    sprintf(cFileName, "%d:", number);
+    fr = f_mount(pfs, cFileName, 1);
+    if (fr != FR_OK)
+    {
+        LOGE("f_mount failed:%d\r\n", fr);
+    }
+    else
+    {
+        LOGI("f_mount OK!\r\n");
+    }
+
+failed_mount:
+    LOGI("----- test_mount %d over  -----\r\n\r\n", number);
+    return fr;
+}
+
+static bk_err_t storage_save_first_frame(frame_buffer_t *frame)
+{
+#if (CONFIG_FATFS)
+	FIL fp1;
+	unsigned int uiTemp = 0;
+	char file_name[50] = {0};
+    LOGI("%s %d %d %s\n", __func__, __LINE__, frame->sequence, capture_name);
+
+	sprintf(file_name, "%d:/%s", DISK_NUMBER_SDIO_SD, capture_name);
+
+	FRESULT fr = f_open(&fp1, file_name, FA_CREATE_ALWAYS | FA_WRITE);
+	if (fr != FR_OK)
+	{
+		LOGE("can not open file: %s, error: %d\n", file_name, fr);
+        fr = stroage_mount_sdcard(DISK_NUMBER_SDIO_SD);
+        if (fr != FR_OK)
+        {
+            LOGE("f_mount failed:%d\r\n", fr);
+            return BK_FAIL;
+        }
+        else
+        {
+            LOGE("f_mount OK!\r\n");
+            os_memset(file_name, 0, 50);
+            sprintf(file_name, "%d:/%s", DISK_NUMBER_SDIO_SD, capture_name);
+            fr = f_open(&fp1, file_name, FA_CREATE_ALWAYS | FA_WRITE);
+            if (fr != FR_OK)
+            {
+                LOGE("can not open file: %s, error: %d\n", file_name, fr);
+                return BK_FAIL;
+            }
+        }
+	}
+
+	fr = f_write(&fp1, (char *)frame->frame, frame->length, &uiTemp);
+	if (fr != FR_OK)
+	{
+		LOGE("f_write failed 1 fr = %d\r\n", fr);
+	}
+	f_close(&fp1);
+    return BK_OK;
 #endif
 }
 
@@ -332,13 +413,39 @@ static void storage_app_capture_save_handle(uint32_t param)
 
 static void storage_app_video_save_handle(uint32_t param)
 {
+    bk_err_t ret = BK_OK;
 	if (storage_app_info.frame && storage_app_info.capture_state == STORAGE_STATE_ENABLED)
 	{
 #if (CONFIG_CACHE_ENABLE)
 		flush_dcache(storage_app_info.frame->frame, storage_app_info.frame->length);
 #endif
+        if (storage_app_info.auto_save)
+        {
+            if (storage_app_info.first_save)
+            {
+                if (storage_app_info.frame->h264_type & (1 << H264_NAL_I_FRAME))
+                {
+                    char file_name[50] = {0};
 
-		storage_save_frame(storage_app_info.frame);
+                    sprintf(file_name, "auto_%d.h264", storage_app_info.save_count);
+                    storage_app_set_frame_name(file_name);
+                    ret = storage_save_first_frame(storage_app_info.frame);
+                    if (ret == BK_OK)
+                    {
+                        storage_app_info.first_save = false;
+                        storage_app_info.save_count ++;
+                        if (storage_app_info.save_count >= storage_app_info.cycle_count)
+                        {
+                            storage_app_info.save_count = 0;
+                        }
+                    }
+                }
+            }
+            else
+            {
+    		    storage_save_frame(storage_app_info.frame);
+            }
+        }
 
 		storage_app_info.frame = NULL;
 
@@ -420,7 +527,7 @@ int storage_app_task_init(void)
 		                         BEKEN_DEFAULT_WORKER_PRIORITY,
 		                         "storage_app_task_thread",
 		                         (beken_thread_function_t)storage_app_task_entry,
-		                         2560,
+		                         6 * 1024,
 		                         NULL);
 
 		if (BK_OK != ret)
@@ -547,6 +654,18 @@ static bk_err_t storage_save_video_exit_handle(void)
 		}
 	}
 
+    if (storage_app_info.auto_time.handle != NULL)
+    {
+        rtos_stop_timer(&storage_app_info.auto_time);
+        rtos_deinit_timer(&storage_app_info.auto_time);
+        storage_app_info.auto_time.handle = NULL;
+    }
+
+    if (pfs != NULL)
+    {
+        os_free(pfs);
+        pfs = NULL;
+    }
 	return ret;
 }
 
@@ -593,6 +712,52 @@ bk_err_t storage_app_task_close_handle(void)
 	return ret;
 }
 
+void storage_app_set_new_file(void *param)
+{
+    storage_app_info.first_save = true;
+    LOGD("%s %d %d\n", __func__, __LINE__, storage_app_info.save_count);
+}
+
+bk_err_t storage_app_set_frame_auto(uint32_t cycle_count, uint32_t cycle_time)
+{
+	int ret = BK_OK;
+	char file_name[50] = {0};
+    os_memset(file_name, 0, 50);
+    sprintf(file_name, "%d:", DISK_NUMBER_SDIO_SD);
+    FRESULT fr = stroage_mount_sdcard(DISK_NUMBER_SDIO_SD);
+    if (fr != FR_OK)
+    {
+        LOGE("f_mount failed:%d\r\n", fr);
+    }
+    else
+    {
+        LOGE("f_mount OK!\r\n");
+    }
+    storage_app_set_frame_name("auto_0.h264");
+    storage_app_info.auto_save = true;
+    storage_app_info.save_count = 0;
+    storage_app_info.cycle_count = cycle_count;
+    storage_app_info.first_save = true;
+    if (storage_app_info.auto_time.handle == NULL)
+    {
+        ret = rtos_init_timer(&storage_app_info.auto_time, cycle_time, storage_app_set_new_file, NULL);
+    	if (ret != BK_OK)
+    	{
+    		LOGE("%s %d create timer failed\n", __func__, __LINE__);
+    	}
+        else
+        {
+            rtos_start_timer(&storage_app_info.auto_time);
+        }
+    }
+    else
+    {
+        rtos_stop_timer(&storage_app_info.auto_time);
+        rtos_start_timer(&storage_app_info.auto_time);
+    }
+	return BK_OK;
+}
+
 bk_err_t storage_app_set_frame_name(char *name)
 {
 	int len = os_strlen(name);
@@ -602,7 +767,7 @@ bk_err_t storage_app_set_frame_name(char *name)
 
 	if (capture_name == NULL)
 	{
-		capture_name = (char *)os_malloc(len + 1);
+		capture_name = (char *)os_malloc(32);
 	}
 
 	os_memcpy(capture_name, (char *)name, len);

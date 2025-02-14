@@ -448,7 +448,7 @@ static void wifi_transfer_net_camera_process_packet(uint8_t *data, uint32_t leng
 			if (hdr->is_eof == 1)
 			{
 				media_app_frame_buffer_push(wifi_transfer_net_camera_buf->frame);
-				wifi_transfer_net_camera_buf->frame = media_app_frame_buffer_jpeg_malloc();
+				wifi_transfer_net_camera_buf->frame = media_app_frame_buffer_small_jpeg_malloc();
 				if (wifi_transfer_net_camera_buf->frame == NULL)
 				{
 					LOGE("frame buffer malloc failed\r\n");
@@ -539,9 +539,9 @@ bk_err_t wifi_transfer_net_camera_open(media_camera_device_t *device)
 
 	LOGI("net_camera_buf->dma_id:%d-%d\r\n", wifi_transfer_net_camera_buf->dma_id, wifi_transfer_net_camera_buf->dma_psram);
 
-	media_app_frame_buffer_init(FB_INDEX_JPEG);
+	media_app_frame_buffer_init(FB_INDEX_SMALL_JPEG);
 
-	wifi_transfer_net_camera_buf->frame = media_app_frame_buffer_jpeg_malloc();
+	wifi_transfer_net_camera_buf->frame = media_app_frame_buffer_small_jpeg_malloc();
 	if (wifi_transfer_net_camera_buf->frame == NULL)
 	{
 		goto error;
@@ -575,7 +575,7 @@ bk_err_t wifi_transfer_net_camera_open(media_camera_device_t *device)
 	}
 
 	ret = rtos_create_thread(&wifi_transfer_net_camera_task,
-								6,
+								4,
 								"net_camera_task",
 								(beken_thread_function_t)wifi_transfer_net_camera_task_entry,
 								4 * 1024,

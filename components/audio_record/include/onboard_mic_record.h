@@ -1,10 +1,10 @@
-// Copyright 2023-2024 Beken
+// Copyright 2024-2025 Beken
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,9 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <os/os.h>
-#include <os/mem.h>
-#include <components/log.h>
 
+#ifndef __ONBOARD_MIC_RECORD_H__
+#define __ONBOARD_MIC_RECORD_H__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "audio_record.h"
+
+audio_record_ops_t *get_onboard_mic_record_ops(void);
+
+#ifdef __cplusplus
+}
+#endif
+#endif /* __ONBOARD_MIC_RECORD_H__ */
 

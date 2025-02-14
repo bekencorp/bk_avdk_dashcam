@@ -1,4 +1,4 @@
-// Copyright 2023-2024 Beken
+// Copyright 2024-2025 Beken
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,28 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef _AUDIO_MAILBOX_H_
-#define _AUDIO_MAILBOX_H_
 
-#include <os/os.h>
-#include <os/mem.h>
-#include <os/str.h>
-#include "audio_coprocess.h"
-#include "media_mailbox_list_util.h"
+#ifndef __MP3_CODEC_H__
+#define __MP3_CODEC_H__
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef struct {
-	void *coprocess_hdl;
-	audio_element_module_t module;		//tell audio coprocess which audio element module need to inital
-	void *param;
-} audio_element_mb_t;
+#include "audio_codec.h"
+
+audio_codec_ops_t *get_mp3_codec_ops(void);
 
 #ifdef __cplusplus
 }
 #endif
-
-#endif
+#endif /* __MP3_CODEC_H__ */
 

@@ -442,6 +442,21 @@ void media_cli_test_cmd(char *pcWriteBuffer, int xWriteBufferLen, int argc, char
 			}
 		}
 
+		if (os_strcmp(argv[1], "save_auto") == 0)
+		{
+			uint32_t cycle_count = 10;
+			uint32_t cycle_time = 1000;
+			if (argc >= 3)
+			{
+				cycle_count = os_strtoul(argv[2], NULL, 10);
+			}
+			if (argc >= 4)
+			{
+				cycle_time = os_strtoul(argv[3], NULL, 10);
+			}
+			ret = media_app_save_auto(cycle_count, cycle_time);
+		}
+
 		if (os_strcmp(argv[1], "save_stop") == 0)
 		{
 			ret = media_app_save_stop();

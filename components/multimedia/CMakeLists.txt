@@ -121,6 +121,12 @@ if (CONFIG_LCD)
 	list(APPEND srcs
 		lcd/lcd_act.c
 	)
+if (CONFIG_MEDIA_RECEIVE_DEMO)
+	list(APPEND srcs
+		lcd/lcd_sw_decode_act.c
+	)
+endif()#CONFIG_MEDIA_RECEIVE_DEMO
+
 endif()
 
 
@@ -147,13 +153,23 @@ if (CONFIG_MEDIA_PIPELINE)
 	list(APPEND srcs
 		pipeline/jpeg_decode_pipeline.c
         pipeline/software_decode_pipeline.c
-		pipeline/lcd_scale_pipeline.c
-		pipeline/yuv_rotate_pipeline.c
 		pipeline/uvc_pipeline_act.c
 		pipeline/jpeg_decode_list.c
 		pipeline/jpeg_get_pipeline.c
 		pipeline/h264_encode_pipeline.c
 	)
+if (CONFIG_MEDIA_PIPELINE_SCALE)
+	list(APPEND srcs
+		pipeline/lcd_scale_pipeline.c
+    )
+endif()
+
+if (CONFIG_MEDIA_PIPELINE_ROTATE)
+	list(APPEND srcs
+		pipeline/yuv_rotate_pipeline.c
+    )
+endif()
+
 endif()
 
 if (CONFIG_MEDIA_MAJOR)
@@ -204,4 +220,4 @@ endif()#(CONFIG_CPU_CNT GREATER 1)
 endif()# CONFIG_MEDIA
 
 endif() # CONFIG_SOC_BK7258
-armino_component_register(SRCS "${srcs}" INCLUDE_DIRS "${incs}" PRIV_REQUIRES bk_cli lvgl net_transfer audio_pipeline avdk_libs video unity media_utils  bk_draw_blend display_service )
+armino_component_register(SRCS "${srcs}" INCLUDE_DIRS "${incs}" PRIV_REQUIRES bk_cli lvgl net_transfer avdk_libs video unity media_utils  bk_draw_blend display_service )

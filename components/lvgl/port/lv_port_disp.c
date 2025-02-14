@@ -63,13 +63,18 @@ static void disp_flush(lv_disp_drv_t * disp_drv, const lv_area_t * area, lv_colo
 /**********************
  *   GLOBAL FUNCTIONS
  **********************/
+#if (!LVGL_USE_PSRAM)
 static void *rotate_buffer = NULL;
+#endif
+
 static beken_semaphore_t lv_dma2d_sem = NULL;
 static uint8_t lv_dma2d_use_flag = 0;
 frame_buffer_t *lvgl_frame_buffer = NULL;
+static uint8_t lvgl_close_flag = 0;
 extern lv_vnd_config_t vendor_config;
 extern media_debug_t *media_debug;
 
+extern bk_err_t lcd_display_task_send_msg(uint8_t type, uint32_t param);
 
 int lv_port_disp_init(void)
 {
@@ -158,6 +163,7 @@ int lv_port_disp_init(void)
     /*Set a display buffer*/
     disp_drv.draw_buf = &draw_buf_dsc_2;
 
+#if (!LVGL_USE_PSRAM)
     if (vendor_config.rotation == ROTATE_180) {
         disp_drv.sw_rotate = 1;
         disp_drv.rotated = LV_DISP_ROT_180;
@@ -170,6 +176,7 @@ int lv_port_disp_init(void)
             return BK_FAIL;
         }
     }
+#endif
 
     /*Required for Example 3)*/
     //disp_drv.full_refresh = 1
@@ -187,11 +194,13 @@ int lv_port_disp_init(void)
 
 void lv_port_disp_deinit(void)
 {
+#if (!LVGL_USE_PSRAM)
     if ((vendor_config.rotation == ROTATE_90) || (vendor_config.rotation == ROTATE_270)) {
         if (rotate_buffer) {
             os_free(rotate_buffer);
         }
     }
+#endif
 
     lv_disp_remove(lv_disp_get_default());
 
@@ -320,6 +329,24 @@ static void lv_dma2d_memcpy_single_draw_buffer(void *Psrc, uint32_t src_xsize, u
 
 static void lvgl_frame_buffer_free(frame_buffer_t *frame_buffer)
 {
+    bk_err_t ret = BK_OK;
+
+    if (lvgl_close_flag == 1) {
+        if (lvgl_frame_buffer == frame_buffer) {
+            ret = lcd_display_task_send_msg(DISPLAY_FRAME_FREE, (uint32_t)lvgl_frame_buffer);
+            if (ret != BK_OK)
+            {
+                LOGE("%s %d lcd_display_task_send_msg send fail\r\n", __func__, __LINE__);
+            }
+            lvgl_close_flag = 2;
+        } else {
+            LOGE("%s %d Error frame buffer!\r\n", __func__, __LINE__);
+        }
+    } else if (lvgl_close_flag == 2) {
+        os_free(lvgl_frame_buffer);
+        lvgl_frame_buffer = NULL;
+        LOGE("%s %d ++++++++++===========+++++++++\r\n", __func__, __LINE__);
+    }
 }
 
 const frame_buffer_callback_t lvgl_frame_buffer_cb =
@@ -331,6 +358,9 @@ const frame_buffer_callback_t lvgl_frame_buffer_cb =
 static void disp_init(void)
 {
     /*You code here*/
+    lvgl_close_flag = 0;
+
+#if (!LVGL_USE_PSRAM)
     #if (LV_COLOR_DEPTH == 16)
         if (lv_vendor_display_frame_cnt() == 2 || lv_vendor_draw_buffer_cnt() == 2) {
             lv_dma2d_memcpy_init();
@@ -338,11 +368,14 @@ static void disp_init(void)
     #else
         lv_dma2d_memcpy_init();
     #endif
+#endif
 
-    lvgl_frame_buffer = os_malloc(sizeof(frame_buffer_t));
     if (!lvgl_frame_buffer) {
-        LOGI("%s %d lvgl_frame_buffer malloc fail\r\n", __func__, __LINE__);
-        return;
+        lvgl_frame_buffer = os_malloc(sizeof(frame_buffer_t));
+        if (!lvgl_frame_buffer) {
+            LOGI("%s %d lvgl_frame_buffer malloc fail\r\n", __func__, __LINE__);
+            return;
+        }
     }
     os_memset(lvgl_frame_buffer, 0, sizeof(frame_buffer_t));
 
@@ -360,6 +393,7 @@ static void disp_init(void)
 
 static void disp_deinit(void)
 {
+#if (!LVGL_USE_PSRAM)
     #if (LV_COLOR_DEPTH == 16)
         if (lv_vendor_display_frame_cnt() == 2 || lv_vendor_draw_buffer_cnt() == 2) {
             lv_dma2d_memcpy_deinit();
@@ -367,11 +401,16 @@ static void disp_deinit(void)
     #else
         lv_dma2d_memcpy_deinit();
     #endif
+#endif
 
-    if (lvgl_frame_buffer) {
-        os_free(lvgl_frame_buffer);
-        lvgl_frame_buffer = NULL;
+    if (!check_lcd_task_is_open()) {
+        if (lvgl_frame_buffer) {
+            os_free(lvgl_frame_buffer);
+            lvgl_frame_buffer = NULL;
+        }
     }
+
+    lvgl_close_flag = 1;
 }
 
 volatile bool disp_flush_enabled = true;
@@ -568,23 +607,17 @@ static void disp_flush(lv_disp_drv_t * disp_drv, const lv_area_t * area, lv_colo
     lv_disp_flush_ready(disp_drv);
 #else
     if (disp_flush_enabled) {
-        lvgl_frame_buffer->width = lv_area_get_width(area);
-        lvgl_frame_buffer->height = lv_area_get_height(area);
         lvgl_frame_buffer->frame = (uint8_t *)color_p;
 
         #if LVGL_USE_DIRECT_MODE
-        static int first_call = 1;
-        if (first_call) {
-            first_call = 0;
-            lcd_display_frame_request(lvgl_frame_buffer);
-        }
-
-        if(lv_disp_flush_is_last(disp_drv)) {
-            lcd_display_frame_request(lvgl_frame_buffer);
-            update_dual_buffer_with_direct_mode(disp_drv, area, (lv_color_t *)color_p);
-        }
+            if (lv_disp_flush_is_last(disp_drv)) {
+                media_debug->lvgl_draw++;
+                lcd_display_frame_request(lvgl_frame_buffer);
+                update_dual_buffer_with_direct_mode(disp_drv, area, (lv_color_t *)color_p);
+            }
         #else
-        lcd_display_frame_request(lvgl_frame_buffer);
+            media_debug->lvgl_draw++;
+            lcd_display_frame_request(lvgl_frame_buffer);
         #endif
     }
 

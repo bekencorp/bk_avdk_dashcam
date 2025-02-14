@@ -85,15 +85,12 @@ typedef struct {
 extern media_debug_t *media_debug;
 extern uint32_t  platform_is_in_interrupt_context(void);
 
+#if CONFIG_LVGL
+uint8_t lvgl_disp_enable = 0;
+#endif
 
 static lcd_disp_config_t *lcd_disp_config = NULL;
 static display_service_info_t *service_info = NULL;
-
-typedef enum {
-	DISPLAY_FRAME_REQUEST,
-	DISPLAY_FRAME_FREE,
-	DISPLAY_FRAME_EXTI,
-} lcd_display_msg_type_t;
 
 bk_err_t lcd_display_task_send_msg(uint8_t type, uint32_t param);
 
@@ -128,10 +125,10 @@ __attribute__((section(".itcm_sec_code"))) static void lcd_driver_display_rgb_is
 #endif
 {
     DISPLAY_ISR_START();
-	flash_op_status_t flash_status = FLASH_OP_IDLE;
-	flash_status = bk_flash_get_operate_status();
+//	flash_op_status_t flash_status = FLASH_OP_IDLE;
+//	flash_status = bk_flash_get_operate_status();
 	media_debug->isr_lcd++;
-if (flash_status == FLASH_OP_IDLE)
+//if (flash_status == FLASH_OP_IDLE)
 {
 	GLOBAL_INT_DECLARATION();
 	if (lcd_disp_config->pingpong_frame != NULL)
@@ -301,7 +298,7 @@ static void lcd_display_task_entry(beken_thread_arg_t data)
 			{
 				case DISPLAY_FRAME_REQUEST:
 #if (CONFIG_LCD_FONT_BLEND || CONFIG_LCD_DMA2D_BLEND)
-                    lcd_font_handle((frame_buffer_t*)msg.param, lcd_disp_config->lcd_width, lcd_disp_config->lcd_height);
+					lcd_font_handle((frame_buffer_t*)msg.param, lcd_disp_config->lcd_width, lcd_disp_config->lcd_height);
 #endif
 					lcd_display_frame((frame_buffer_t*)msg.param);
 					break;

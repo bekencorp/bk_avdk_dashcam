@@ -76,9 +76,9 @@ bk_err_t lcd_rotate_deinit(void)
 	return ret;
 }
 
-bk_err_t lcd_rotate_init(media_rotate_mode_t	rotate_mode)
+bk_err_t lcd_rotate_init(media_rotate_mode_t rotate_mode)
 {
-	bk_err_t ret = BK_OK;
+	bk_err_t ret = BK_FAIL;
 	ret = rtos_init_semaphore_ex(&s_rot.rot_sem, 1, 0);
 
 	if (ret != BK_OK)
@@ -89,13 +89,14 @@ bk_err_t lcd_rotate_init(media_rotate_mode_t	rotate_mode)
 
 	if(rotate_mode == HW_ROTATE)
 	{
-		#ifdef CONFIG_HW_ROTATE_PFC
+#ifdef CONFIG_HW_ROTATE_PFC
 		bk_rott_driver_init();
 		bk_rott_int_enable(ROTATE_COMPLETE_INT | ROTATE_CFG_ERR_INT | ROTATE_WARTERMARK_INT, 1);
 		bk_rott_isr_register(ROTATE_COMPLETE_INT, rotate_complete_cb);
 		bk_rott_isr_register(ROTATE_WARTERMARK_INT, rotate_watermark_cb);
 		bk_rott_isr_register(ROTATE_CFG_ERR_INT, rotate_cfg_err_cb);
-		#endif
+		ret = BK_OK;
+#endif
 	}
 	return ret;
 }

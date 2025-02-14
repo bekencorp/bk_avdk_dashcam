@@ -50,7 +50,7 @@
 #define LOGD(...) BK_LOGD(TAG, ##__VA_ARGS__)
 
 #if CONFIG_LVGL
-uint8_t lvgl_disp_enable = 0;
+extern uint8_t lvgl_disp_enable;
 #endif
 
 #ifdef ROTATE_DIAG_DEBUG

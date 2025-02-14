@@ -170,7 +170,18 @@ menu "Media"
 		help
 			BT Module Will Use AUDIO Module
 
-    config SOFTWARE_DECODE_SRAM_MAPPING
-        bool "Enable Software Decode Sram Mapping"
+	config SOFTWARE_DECODE_SRAM_MAPPING
+		bool "Enable Software Decode Sram Mapping"
 		default n
+
+    config MEDIA_PIPELINE_SCALE
+		depends on LCD
+		bool "Enable pipeline scale"
+		default y
+
+	config MEDIA_PIPELINE_ROTATE
+		depends on LCD
+		bool "Enable pipeline rotate"
+		default y
+
 endmenu

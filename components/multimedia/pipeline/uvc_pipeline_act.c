@@ -35,7 +35,9 @@
 
 static pixel_format_t lcd_fmt = PIXEL_FMT_UNKNOW;
 static media_rotate_t pipeline_rotate = ROTATE_90;
+#if CONFIG_MEDIA_PIPELINE_SCALE
 static uint8_t lcd_scale = 0;
+#endif
 
 #ifdef CONFIG_BT_REUSE_MEDIA_MEMORY
 __attribute__((section(".bt_spec_data"), aligned(0x10))) mux_sram_buffer_t mux_sram_buffer_saved = { 0 };
@@ -90,6 +92,15 @@ static bk_err_t h264_jdec_pipeline_close(media_mailbox_msg_t *msg)
 {
 	LOGI("%s %d\n", __func__, __LINE__);
 
+#if SUPPORTED_IMAGE_MAX_720P_ONLY_H264
+    bk_jdec_buffer_request_deregister(PIPELINE_MOD_H264);
+    h264_encode_task_close();
+    if (!check_lcd_task_is_open())
+	{
+		jpeg_decode_task_close();
+		LOGI("%s decode task close complete \n", __func__);
+	}
+#else
 	if (check_rotate_task_is_open() || check_lcd_task_is_open())
 	{
 		bk_jdec_buffer_request_deregister(PIPELINE_MOD_H264);
@@ -105,6 +116,7 @@ static bk_err_t h264_jdec_pipeline_close(media_mailbox_msg_t *msg)
 		LOGI("%s decode task close complete \n", __func__);
 
 	}
+#endif
 	LOGI("%s complete, %d \n", __func__, __LINE__);
 
 	return BK_OK;
@@ -154,6 +166,22 @@ static bk_err_t lcd_disp_pipeline_close(media_mailbox_msg_t *msg)
 static bk_err_t lcd_jdec_pipeline_open(media_mailbox_msg_t *msg)
 {
 	int ret = BK_OK;
+#if SUPPORTED_IMAGE_MAX_720P_ONLY_H264
+
+	if (!check_jpeg_decode_task_is_open())
+	{
+		ret = jpeg_decode_task_open(JPEGDEC_HW_MODE, JPEGDEC_BY_LINE, pipeline_rotate);
+
+		if (ret != BK_OK)
+		{
+			LOGE("%s, jpeg_decode_task_open fail\n", __func__);
+		}
+	}
+	LOGI("%s %d\n", __func__, __LINE__);
+	return ret;
+
+#else
+
 	rot_open_t rot_open = {0};
 
 #if SUPPORTED_IMAGE_MAX_720P
@@ -215,8 +243,8 @@ static bk_err_t lcd_jdec_pipeline_open(media_mailbox_msg_t *msg)
 error:
 	LOGI("%s fail\n", __func__, __LINE__);
 	rotate_task_close();
-
 	return BK_FAIL;
+#endif
 }
 
 static bk_err_t lcd_jdec_pipeline_close(media_mailbox_msg_t *msg)
@@ -225,6 +253,19 @@ static bk_err_t lcd_jdec_pipeline_close(media_mailbox_msg_t *msg)
 
 	LOGI("%s %d\n", __func__, __LINE__);
 
+#if SUPPORTED_IMAGE_MAX_720P_ONLY_H264
+	if (!check_h264_task_is_open() && !check_lcd_sw_decode_act_is_open())
+	{
+		ret = jpeg_decode_task_close();
+		if (ret != BK_OK)
+		{
+			LOGE("%s %d decode task close fail\n", __func__, __LINE__);
+			return ret;
+		}
+	}
+	LOGI("%s complete, %d \n", __func__, __LINE__);
+	return ret;
+#else
 	if (check_h264_task_is_open())
 	{
 #if SUPPORTED_IMAGE_MAX_720P
@@ -259,14 +300,15 @@ static bk_err_t lcd_jdec_pipeline_close(media_mailbox_msg_t *msg)
 		}
 		LOGI("%s decode task close complete, %d \n", __func__, __LINE__);
 	}
-
 	LOGI("%s complete, %d \n", __func__, __LINE__);
-
 	return BK_OK;
+
+#endif
 }
 
 static bk_err_t lcd_scale_pipeline_open(media_mailbox_msg_t *msg)
 {
+#if (CONFIG_MEDIA_PIPELINE_SCALE)
 	int ret = BK_OK;
 	ret = scale_task_open((lcd_scale_t *)msg->param);
 	if (ret != BK_OK)
@@ -280,14 +322,17 @@ static bk_err_t lcd_scale_pipeline_open(media_mailbox_msg_t *msg)
 error:
     lcd_scale = 0;
     scale_task_close();
+#endif
     return BK_FAIL;
 }
 
-static bk_err_t lcd_scale_pipline_close(media_mailbox_msg_t *msg)
+static bk_err_t lcd_scale_pipeline_close(media_mailbox_msg_t *msg)
 {
+#if (CONFIG_MEDIA_PIPELINE_SCALE)
 	LOGI("%s %d\n", __func__, __LINE__);
     scale_task_close();
     lcd_scale = 0;
+#endif
 	return BK_OK;
 }
 
@@ -412,11 +457,13 @@ bk_err_t uvc_pipeline_init(void)
 
 	bk_jdec_pipeline_init();
 
-#if SUPPORTED_IMAGE_MAX_720P
+#if CONFIG_MEDIA_PIPELINE_SCALE
 	bk_scale_pipeline_init();
 #endif
 
+#if CONFIG_MEDIA_PIPELINE_ROTATE
 	bk_rotate_pipeline_init();
+#endif
 	bk_h264_pipeline_init();
 
 	return BK_OK;

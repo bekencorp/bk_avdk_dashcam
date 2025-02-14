@@ -434,18 +434,29 @@ void jpeg_decode_set_rotate_angle(media_rotate_t rotate_angle)
 	}
 }
 
+void jpeg_software_decode_callback_cp1(uint8_t ret)
+{
+    jpeg_decode_task_send_msg(JPEGDEC_FRAME_CP1_FINISH, ret);
+}
+
+void jpeg_software_decode_callback_cp2(uint8_t ret)
+{
+    jpeg_decode_task_send_msg(JPEGDEC_FRAME_CP2_FINISH, ret);
+}
+
 static void jpeg_decode_software_decode_start_handle(frame_module_t module)
 {
+#if !CONFIG_SUPPORTED_IMAGE_MAX_720P_ONLY_H264
 	if (!jdec_config->mux_buf[1].state[PIPELINE_MOD_SW_DEC])
 	{
-		if (module == MODULE_DECODER)
+		if (module == MODULE_DECODER_CP2)
 		{
 			jdec_config->jdec_frame = frame_buffer_display_malloc(jdec_config->jpeg_frame->width *
 										jdec_config->jpeg_frame->height * 2);
 			if(jdec_config->jdec_frame == NULL)
 			{
 				LOGE("%s(%d) jdec_config->jdec_frame is NULL\r\n", __func__, __LINE__);
-				frame_buffer_fb_free(jdec_config->jpeg_frame, MODULE_DECODER);
+				frame_buffer_fb_free(jdec_config->jpeg_frame, module);
 				jdec_config->jpeg_frame = NULL;
 				if (!jdec_config->task_state)
 				{
@@ -453,7 +464,7 @@ static void jpeg_decode_software_decode_start_handle(frame_module_t module)
 				}
 				else
 				{
-					jpeg_get_task_send_msg(JPEGDEC_START, MODULE_DECODER);
+					jpeg_get_task_send_msg(JPEGDEC_START, MODULE_DECODER_CP2);
 				}
 				return;
 			}
@@ -466,6 +477,7 @@ static void jpeg_decode_software_decode_start_handle(frame_module_t module)
 
 			jdec_config->sw_dec_info[1].in_frame = jdec_config->jpeg_frame;
 			jdec_config->sw_dec_info[1].out_frame = jdec_config->jdec_frame;
+			jdec_config->sw_dec_info[1].cb = &jpeg_software_decode_callback_cp2;
 			jdec_config->cp2_last_decode_sequence = jdec_config->jpeg_frame->sequence;
 			jdec_config->jpeg_frame = NULL;
 			jdec_config->jdec_frame = NULL;
@@ -480,6 +492,7 @@ static void jpeg_decode_software_decode_start_handle(frame_module_t module)
 			jpeg_get_task_send_msg(JPEGDEC_START, MODULE_DECODER);
 		}
 	}
+#endif
 
 	if (!jdec_config->mux_buf[0].state[PIPELINE_MOD_SW_DEC])
 	{
@@ -493,7 +506,7 @@ static void jpeg_decode_software_decode_start_handle(frame_module_t module)
 		if(jdec_config->jdec_frame == NULL)
 		{
 			LOGE("%s(%d) jdec_config->jdec_frame is NULL\r\n", __func__, __LINE__);
-			frame_buffer_fb_free(jdec_config->jpeg_frame, MODULE_DECODER_CP1);
+			frame_buffer_fb_free(jdec_config->jpeg_frame, module);
 			jdec_config->jpeg_frame = NULL;
 			if (!jdec_config->task_state)
 			{
@@ -514,6 +527,7 @@ static void jpeg_decode_software_decode_start_handle(frame_module_t module)
 
 		jdec_config->sw_dec_info[0].in_frame = jdec_config->jpeg_frame;
 		jdec_config->sw_dec_info[0].out_frame = jdec_config->jdec_frame;
+        jdec_config->sw_dec_info[0].cb = &jpeg_software_decode_callback_cp1;
 		jdec_config->cp1_last_decode_sequence = jdec_config->jpeg_frame->sequence;
 		jdec_config->jpeg_frame = NULL;
 		jdec_config->jdec_frame = NULL;
@@ -521,6 +535,12 @@ static void jpeg_decode_software_decode_start_handle(frame_module_t module)
 
 		software_decode_task_send_msg(JPEGDEC_START, (uint32_t)&jdec_config->sw_dec_info[0]);
 	}
+
+    if (jdec_config->jpeg_frame)
+    {
+        frame_buffer_fb_free(jdec_config->jpeg_frame, module);
+        jdec_config->jpeg_frame = NULL;
+    }
 }
 
 static void jpeg_decode_start_handle(frame_buffer_t *jpeg_frame, frame_module_t module)
@@ -536,13 +556,13 @@ static void jpeg_decode_start_handle(frame_buffer_t *jpeg_frame, frame_module_t 
 		{
 			return;
 		}
-		if (module == MODULE_DECODER)
+		if (module == MODULE_DECODER_CP2)
 		{
 			if (jdec_config->jpeg_frame->sequence != 0 && jdec_config->jpeg_frame->sequence <= jdec_config->cp1_last_decode_sequence)
 			{
-				frame_buffer_fb_free(jdec_config->jpeg_frame, MODULE_DECODER);
+				frame_buffer_fb_free(jdec_config->jpeg_frame, module);
 				jdec_config->jpeg_frame = NULL;
-				jpeg_get_task_send_msg(JPEGDEC_START, MODULE_DECODER);
+				jpeg_get_task_send_msg(JPEGDEC_START, MODULE_DECODER_CP2);
 				return;
 			}
 		}
@@ -632,6 +652,7 @@ static void jpeg_decode_start_handle(frame_buffer_t *jpeg_frame, frame_module_t 
 				__func__, jdec_config->jpeg_frame->width, jdec_config->jpeg_frame->height);
 			jdec_config->jdec_mode = JPEGDEC_SW_MODE;
 			jdec_config->jdec_type = JPEGDEC_BY_FRAME;
+#if !CONFIG_SUPPORTED_IMAGE_MAX_720P_ONLY_H264
 			if(CPU2_USER_JPEG_SW_DEC == vote_start_cpu2_core(CPU2_USER_JPEG_SW_DEC))	//first owner start CPU2, so needs to wait sem
 			{
 				rtos_get_semaphore(&jdec_config->jdec_cp2_init_sem, BEKEN_WAIT_FOREVER);
@@ -648,6 +669,7 @@ static void jpeg_decode_start_handle(frame_buffer_t *jpeg_frame, frame_module_t 
 
 				msg_send_req_to_media_major_mailbox_sync(EVENT_JPEG_DEC_SET_ROTATE_ANGLE_NOTIFY, MINOR_MODULE, jdec_config->rotate_angle, NULL);
 			}
+#endif
 		}
 	}
 
@@ -948,10 +970,12 @@ static void jpeg_decode_task_deinit(void)
 {
 	LOGI("%s\r\n", __func__);
 	jpeg_get_task_close();
+#if !CONFIG_SUPPORTED_IMAGE_MAX_720P_ONLY_H264
 	if(check_software_decode_task_is_open())
 	{
 		software_decode_task_close();
 	}
+#endif
 	if (jdec_config)
 	{
 		/* // maybe do not judge jpeg decode mode
@@ -1626,13 +1650,14 @@ bk_err_t jpeg_decode_task_open(media_decode_mode_t jdec_mode, media_decode_type_
 	frame_buffer_fb_register(MODULE_DECODER, FB_INDEX_JPEG);
 
 	INIT_LIST_HEAD(&jdec_config->jpeg_decode_queue);
+#if !CONFIG_SUPPORTED_IMAGE_MAX_720P_ONLY_H264
 	ret = software_decode_task_open();
 	if (ret != BK_OK)
 	{
 		LOGE("%s, software_decode_task_open failed\r\n", __func__);
 		goto error;
 	}
-
+#endif
 	ret = rtos_init_queue(&jdec_config->jdec_queue,
 							"jdec_que",
 							sizeof(jpeg_msg_t),
@@ -1695,20 +1720,24 @@ bk_err_t jpeg_decode_task_close()
 
 	jpeg_get_task_close();
 
+#if !CONFIG_SUPPORTED_IMAGE_MAX_720P_ONLY_H264
 	if(check_software_decode_task_is_open())
 	{
 		software_decode_task_close();
 	}
+#endif
 
 	rtos_unlock_mutex(&jdec_info->lock);
 
 	jpeg_decode_task_send_msg(JPEGDEC_STOP, 0);
 	rtos_get_semaphore(&jdec_config->jdec_sem, BEKEN_NEVER_TIMEOUT);
 
+#if !CONFIG_SUPPORTED_IMAGE_MAX_720P_ONLY_H264
 	if (jdec_config->sw_dec_init == 1)
 	{
 		vote_stop_cpu2_core(CPU2_USER_JPEG_SW_DEC);
 	}
+#endif
 
 	rtos_lock_mutex(&jdec_info->lock);
 	jpeg_decode_task_deinit();

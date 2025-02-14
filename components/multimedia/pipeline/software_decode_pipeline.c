@@ -63,7 +63,6 @@ static sw_dec_config_t *sw_dec_config = NULL;
 #include "FreeRTOS.h"
 #include "task.h"
 #include <driver/dma2d.h>
-#define DOUBLE_BUFFER_TO_COPY 0
 
 __attribute__((section(".dtcm_sec_data "))) StaticTask_t xSWDecTaskTCB = {0};
 __attribute__((section(".dtcm_sec_data "))) StackType_t uxSWDecTaskStack[ 512 ] = {0};
@@ -71,11 +70,6 @@ __attribute__((section(".dtcm_sec_data "))) StackType_t uxSWDecTaskStack[ 512 ] 
 #define BUFFER_SIZE (864 * 8 * 2 * 2 * 2)
 uint8_t *sw_dma2d_buffer_1 = NULL;
 __attribute__((section(".dtcm_sec_data "))) uint8_t rotate_buffer_sw[16*16*2] = {0};
-#if DOUBLE_BUFFER_TO_COPY
-uint8_t *sw_dma2d_buffer_2 = NULL;
-static beken_semaphore_t sw_sem;
-static beken_mutex_t sw_dma2d_lock;
-#endif
 __attribute__((section(".dtcm_sec_data "))) uint8_t jpeg_decode_buffer[0xB0] = {0};
 #endif
 
@@ -116,18 +110,6 @@ static void software_decode_task_deinit(void)
         }
 #if CONFIG_SOFTWARE_DECODE_SRAM_MAPPING
 		sw_dec_config->rotate_buffer = NULL;
-#if DOUBLE_BUFFER_TO_COPY
-		if(sw_sem)
-		{
-			rtos_deinit_semaphore(&sw_sem);
-		}
-
-		if(sw_dma2d_lock)
-		{
-			rtos_deinit_mutex(&sw_dma2d_lock);
-		}
-		bk_dma2d_driver_deinit();
-#endif
 #else
 		if (sw_dec_config->rotate_buffer)
 		{
@@ -146,79 +128,6 @@ static void software_decode_task_deinit(void)
 }
 
 #if CONFIG_SOFTWARE_DECODE_SRAM_MAPPING
-#if DOUBLE_BUFFER_TO_COPY
-static void sw_dma2d_config_error(void)
-{
-	LOGE("%s\n", __func__);
-	rtos_set_semaphore(&sw_sem);
-}
-
-static void sw_dma2d_transfer_error(void)
-{
-	LOGE("%s\n", __func__);
-	rtos_set_semaphore(&sw_sem);
-}
-
-static void sw_dma2d_transfer_complete(void)
-{
-	rtos_set_semaphore(&sw_sem);
-}
-
-void sw_dec_set_dma2d_cb(void)
-{
-	bk_dma2d_register_int_callback_isr(DMA2D_CFG_ERROR_ISR, sw_dma2d_config_error);
-	bk_dma2d_register_int_callback_isr(DMA2D_TRANS_ERROR_ISR, sw_dma2d_transfer_error);
-	bk_dma2d_register_int_callback_isr(DMA2D_TRANS_COMPLETE_ISR, sw_dma2d_transfer_complete);
-}
-
-bk_err_t sw_dma2d_copy(uint8_t *out, uint8_t *in,
-			uint32_t in_w, uint32_t in_h,
-			uint32_t out_w, uint32_t out_h,
-			uint32_t x_pos, uint32_t y_pos)
-{
-	rtos_lock_mutex(&sw_dma2d_lock);
-#if CONFIG_SOFTWARE_DECODE_SRAM_MAPPING
-#if (CONFIG_CACHE_ENABLE)
-	flush_all_dcache();
-#endif
-#endif
-	bk_err_t ret = rtos_get_semaphore(&sw_sem, 5);
-	if (ret != BK_OK)
-	{
-		LOGE("%s %d get sem timeout %x out:%p int:%p\n", __func__, __LINE__, ret, out, in);
-		bk_dma2d_soft_reset();
-		rtos_unlock_mutex(&sw_dma2d_lock);
-		return ret;
-	}
-	dma2d_memcpy_pfc_t dma2d_memcpy_pfc = {0};
-
-	dma2d_memcpy_pfc.input_addr = (char *)in;
-	dma2d_memcpy_pfc.output_addr = (char *)out;
-
-	dma2d_memcpy_pfc.mode = DMA2D_M2M;
-	dma2d_memcpy_pfc.input_color_mode = DMA2D_INPUT_YUYV;
-	dma2d_memcpy_pfc.src_pixel_byte = TWO_BYTES;
-	dma2d_memcpy_pfc.output_color_mode = DMA2D_OUTPUT_YUYV;
-	dma2d_memcpy_pfc.dst_pixel_byte = TWO_BYTES;
-
-	dma2d_memcpy_pfc.src_frame_xpos = 0;
-	dma2d_memcpy_pfc.src_frame_ypos = 0;
-
-	dma2d_memcpy_pfc.dma2d_width = in_w;
-	dma2d_memcpy_pfc.dma2d_height = in_h;
-	dma2d_memcpy_pfc.src_frame_width = in_w;
-	dma2d_memcpy_pfc.src_frame_height = in_h;
-	dma2d_memcpy_pfc.dst_frame_width = out_w;
-	dma2d_memcpy_pfc.dst_frame_height = out_h;
-	dma2d_memcpy_pfc.dst_frame_xpos = x_pos;
-	dma2d_memcpy_pfc.dst_frame_ypos = y_pos;
-	bk_dma2d_memcpy_or_pixel_convert(&dma2d_memcpy_pfc);
-	bk_dma2d_start_transfer();
-	rtos_unlock_mutex(&sw_dma2d_lock);
-	return BK_OK;
-}
-#endif
-
 __attribute__((section(".itcm_sec_code "))) bk_err_t sw_cpu_copy(uint8_t *out, uint8_t *in,
 			uint32_t in_w, uint32_t in_h,
 			uint32_t out_w, uint32_t out_h,
@@ -310,9 +219,6 @@ static bk_err_t jpeg_decode_frame(frame_buffer_t *in_frame, frame_buffer_t *out_
 	{
 		sw_dec_config->rotate_buffer = rotate_buffer_sw;
 	}
-#if DOUBLE_BUFFER_TO_COPY
-	rtos_set_semaphore(&sw_sem);
-#endif
 #else
 	if (sw_dec_config->rotate_buffer == NULL)
 	{
@@ -362,21 +268,20 @@ static void software_decode_main(beken_thread_arg_t data)
 					media_software_decode_info_t *sw_dec_info = (media_software_decode_info_t *)msg.param;
 					if (sw_dec_info != NULL)
 					{
-#if CONFIG_SOFTWARE_DECODE_SRAM_MAPPING
-#if DOUBLE_BUFFER_TO_COPY
-						if (sw_dma2d_buffer_1)
-						{
-							sw_dec_set_dma2d_cb();
-						}
-#endif
-#endif
 						DECODER_FRAME_START();
 						ret = jpeg_decode_frame(sw_dec_info->in_frame, sw_dec_info->out_frame);
 						if (ret != BK_OK)
 						{
 							LOGE("%s sw decoder error\n", __func__);
 						}
-						jpeg_decode_task_send_msg(JPEGDEC_FRAME_CP1_FINISH, ret);
+						if (sw_dec_info->cb)
+						{
+							sw_dec_info->cb(ret);
+						}
+						else
+						{
+							LOGE("%s dec complete ret is %d but no callback\n", __func__, ret);
+						}
 						DECODER_FRAME_END();
 					}
 				}
@@ -438,7 +343,8 @@ bk_err_t software_decode_task_open()
 	}
 
 	os_memset(sw_dec_config, 0, sizeof(sw_dec_config_t));
-	frame_buffer_fb_register(MODULE_DECODER_CP1, FB_INDEX_JPEG);
+
+	frame_buffer_fb_register(MODULE_DECODER_CP1, FB_INDEX_SMALL_JPEG);
 
 #if CONFIG_SOFTWARE_DECODE_SRAM_MAPPING
 	bk_jpeg_dec_sw_init(jpeg_decode_buffer, sizeof(jpeg_decode_buffer));
@@ -469,25 +375,8 @@ bk_err_t software_decode_task_open()
 	flush_all_dcache();
 #endif
 
+#if 0
 	sw_dma2d_buffer_1 = mux_sram_buffer->rotate;
-#if DOUBLE_BUFFER_TO_COPY
-	ret = rtos_init_semaphore(&sw_sem, 1);
-	if (ret != BK_OK)
-	{
-		goto error;
-	}
-	rtos_init_mutex(&sw_dma2d_lock);
-
-	sw_dma2d_buffer_2 = sw_dma2d_buffer_1 + (BUFFER_SIZE >> 2);
-
-	bk_dma2d_driver_init();
-
-	bk_dma2d_int_enable(DMA2D_CFG_ERROR | DMA2D_TRANS_ERROR | DMA2D_TRANS_COMPLETE,1);
-	bk_dma2d_register_int_callback_isr(DMA2D_CFG_ERROR_ISR, sw_dma2d_config_error);
-	bk_dma2d_register_int_callback_isr(DMA2D_TRANS_ERROR_ISR, sw_dma2d_transfer_error);
-	bk_dma2d_register_int_callback_isr(DMA2D_TRANS_COMPLETE_ISR, sw_dma2d_transfer_complete);
-	jd_set_jpg_copy_func(sw_dma2d_buffer_1), ADDR_TO_CACHE(sw_dma2d_buffer_2), (BUFFER_SIZE >> 2), sw_dma2d_copy, JD_DOUBLE_BUFFER_COPY);
-#else
 	jd_set_jpg_copy_func(sw_dma2d_buffer_1, NULL, (BUFFER_SIZE >> 1), sw_cpu_copy, JD_SINGLE_BUFFER_COPY);
 #endif
 
