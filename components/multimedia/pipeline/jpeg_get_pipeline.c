@@ -259,7 +259,9 @@ bk_err_t jpeg_get_task_close()
 	jpeg_get_config->task_state = false;
 
 	frame_buffer_fb_deregister(MODULE_DECODER, FB_INDEX_JPEG);
+#if !CONFIG_SUPPORTED_IMAGE_MAX_720P_ONLY_H264
 	frame_buffer_fb_deregister(MODULE_DECODER_CP1, FB_INDEX_JPEG);
+#endif
 
 	jpeg_get_task_send_msg(JPEGDEC_STOP, 0);
 	rtos_get_semaphore(&jpeg_get_config->jdec_sem, BEKEN_NEVER_TIMEOUT);
