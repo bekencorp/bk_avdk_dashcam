@@ -271,11 +271,11 @@ static bk_err_t storage_save_frame(frame_buffer_t *frame)
 	int fd;
 	int ret = BK_OK;
 	char file_name[FILENAME_MAX_LEN] = {0};
-	LOGD("%s %d %d %s\n", __func__, __LINE__, frame->sequence, capture_name);
+	LOGI("%s %d %d %s\n", __func__, __LINE__, frame->sequence, capture_name);
 
 	sprintf(file_name, "%s/%s", STORAGE_MOUNT_PATH, capture_name);
 
-	fd = open(file_name, O_RDWR | O_CREAT);
+	fd = open(file_name, O_WRONLY | O_APPEND);
 	if (fd == -1)
 	{
 		LOGE("can not open file: %s, error: %d\n", file_name, fd);
@@ -300,7 +300,7 @@ static bk_err_t storage_save_first_frame(frame_buffer_t *frame)
 
 	sprintf(file_name, "%s/%s", STORAGE_MOUNT_PATH, capture_name);
 
-	fd = open(file_name, O_RDWR | O_TRUNC);
+	fd = open(file_name, O_WRONLY | O_TRUNC);
 	if (fd == -1)
 	{
 		LOGE("can not open file: %s, error: %d\n", file_name+1, fd);

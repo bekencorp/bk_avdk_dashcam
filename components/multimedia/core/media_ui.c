@@ -125,8 +125,10 @@ static void media_debug_dump(void)
 			fps, media_debug->fps_lcd,
 			lvgl, media_debug->lvgl_draw);
 
-	LOGI("wifi:%d[%d, %dkbps, %dms, num:%d, retry:%d], jpg:%dKB[%dKbps], h264:%dKB[%dKbps]\n",
-			wifi, media_debug->fps_wifi, wifi_kps, meantimes, count, retry,
+	LOGI("wifi:%d[%d, %dKB[%dkbps], %dms, num:%d, retry:%d]\n",
+			wifi, media_debug->fps_wifi, media_debug->wifi_length, wifi_kps, meantimes, count, retry);
+
+	LOGI("jpg:%dKB[%dKbps], h264:%dKB[%dKbps]\n",
 			media_debug->jpeg_length / 1024, jpeg_kps,
 			media_debug->h264_length / 1024, h264_kps);
 }
@@ -210,7 +212,8 @@ static void media_ui_frame_buffer_event_handle(media_mailbox_msg_t *msg)
 		{
 			frame_buffer_t *new_frame = (frame_buffer_t *)msg->param;
 			media_debug->fps_wifi++;
-			media_debug->jpeg_length = new_frame->length;
+			media_debug->wifi_kbps += new_frame->length;
+			media_debug->wifi_length = new_frame->length;
 			frame_buffer_fb_push(new_frame);
 			ret = BK_OK;
 			break;
