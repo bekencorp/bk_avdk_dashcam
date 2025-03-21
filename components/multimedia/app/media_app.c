@@ -1074,7 +1074,14 @@ bk_err_t media_app_capture(char *name)
 		return ret;
 	}
 
-	media_app_storage_enable(app_camera_type, 1);
+	if (media_modules_state->stor_state == STORAGE_STATE_DISABLED)
+	{
+		ret = media_app_storage_enable(app_camera_type, 1);
+		if (ret != BK_OK)
+		{
+			return ret;
+		}
+	}
 
 	ret = storage_app_set_frame_name(name);
 	if (ret != BK_OK)
@@ -1083,8 +1090,12 @@ bk_err_t media_app_capture(char *name)
 	}
 
 	ret = media_send_msg_sync(EVENT_STORAGE_CAPTURE_IND, 0);
+	if (ret == BK_OK)
+	{
+		media_modules_state->stor_state = STORAGE_STATE_RUNNING;
+	}
 
-	LOGI("%s complete\n", __func__);
+	LOGI("%s complete state:%d\n", __func__, media_modules_state->stor_state);
 
 	return ret;
 }
@@ -1093,7 +1104,20 @@ bk_err_t media_app_save_auto(uint32_t cycle_count, uint32_t cycle_time)
 {
 	int ret = BK_OK;
 
-	media_app_storage_enable(APP_CAMERA_DVP_H264_LOCAL, 1);
+	if (media_modules_state->stor_state == STORAGE_STATE_DISABLED)
+	{
+		ret = media_app_storage_enable(APP_CAMERA_DVP_H264_LOCAL, 1);
+		if (ret != BK_OK)
+		{
+			return ret;
+		}
+	}
+
+	if (media_modules_state->stor_state == STORAGE_STATE_RUNNING)
+	{
+		LOGI("%s is already saving state:%d\n", __func__, media_modules_state->stor_state);
+		return ret;
+	}
 
 	ret = storage_app_set_frame_auto(cycle_count, cycle_time);
 	if (ret != BK_OK)
@@ -1102,8 +1126,12 @@ bk_err_t media_app_save_auto(uint32_t cycle_count, uint32_t cycle_time)
 	}
 
 	ret = media_send_msg_sync(EVENT_STORAGE_SAVE_START_IND, 0);
+	if (ret == BK_OK)
+	{
+		media_modules_state->stor_state = STORAGE_STATE_RUNNING;
+	}
 
-	LOGI("%s complete\n", __func__);
+	LOGI("%s complete state:%d\n", __func__, media_modules_state->stor_state);
 
 	return ret;
 }
@@ -1117,7 +1145,20 @@ bk_err_t media_app_save_start(char *name)
 		return ret;
 	}
 
-	media_app_storage_enable(app_camera_type, 1);
+	if (media_modules_state->stor_state == STORAGE_STATE_DISABLED)
+	{
+		ret = media_app_storage_enable(app_camera_type, 1);
+		if (ret != BK_OK)
+		{
+			return ret;
+		}
+	}
+
+	if (media_modules_state->stor_state == STORAGE_STATE_RUNNING)
+	{
+		LOGI("%s is already saving state:%d\n", __func__, media_modules_state->stor_state);
+		return ret;
+	}
 
 	ret = storage_app_set_frame_name(name);
 	if (ret != BK_OK)
@@ -1126,8 +1167,12 @@ bk_err_t media_app_save_start(char *name)
 	}
 
 	ret = media_send_msg_sync(EVENT_STORAGE_SAVE_START_IND, 0);
+	if (ret == BK_OK)
+	{
+		media_modules_state->stor_state = STORAGE_STATE_RUNNING;
+	}
 
-	LOGI("%s complete\n", __func__);
+	LOGI("%s complete state:%d\n", __func__, media_modules_state->stor_state);
 
 	return ret;
 }
@@ -1144,6 +1189,12 @@ bk_err_t media_app_save_stop(void)
 		return ret;
 	}
 
+	if (media_modules_state->stor_state == STORAGE_STATE_ENABLED)
+	{
+		LOGI("%s is not saving state:%d\n", __func__, media_modules_state->stor_state);
+		return ret;
+	}
+
 	ret = media_send_msg_sync(EVENT_STORAGE_SAVE_STOP_IND, 0);
 	if (ret != BK_OK)
 	{
@@ -1152,8 +1203,12 @@ bk_err_t media_app_save_stop(void)
 
 	msg.event = EVENT_STORAGE_SAVE_STOP_IND;
 	ret = storage_app_event_handle(&msg);
+	if (ret == BK_OK)
+	{
+		media_modules_state->stor_state = STORAGE_STATE_ENABLED;
+	}
 
-	LOGI("%s complete\n", __func__);
+	LOGI("%s complete state:%d\n", __func__, media_modules_state->stor_state);
 
 	return ret;
 }
