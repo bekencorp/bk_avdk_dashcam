@@ -93,13 +93,10 @@ static bk_err_t h264_jdec_pipeline_close(media_mailbox_msg_t *msg)
 	LOGI("%s %d\n", __func__, __LINE__);
 
 #if SUPPORTED_IMAGE_MAX_720P_ONLY_H264
-    bk_jdec_buffer_request_deregister(PIPELINE_MOD_H264);
-    h264_encode_task_close();
-    if (!check_lcd_task_is_open())
-	{
-		jpeg_decode_task_close();
-		LOGI("%s decode task close complete \n", __func__);
-	}
+	bk_jdec_buffer_request_deregister(PIPELINE_MOD_H264);
+	h264_encode_task_close();
+	jpeg_decode_task_close();
+	LOGI("%s decode task close complete \n", __func__);
 #else
 	if (check_rotate_task_is_open() || check_lcd_task_is_open())
 	{

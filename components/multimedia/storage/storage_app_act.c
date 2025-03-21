@@ -309,7 +309,7 @@ static bk_err_t storage_save_frame(frame_buffer_t *frame)
 
 static FATFS *pfs = NULL;
 
-FRESULT stroage_mount_sdcard(DISK_NUMBER number)
+FRESULT storage_mount_sdcard(DISK_NUMBER number)
 {
     FRESULT fr = FR_DISK_ERR;
     char cFileName[50];
@@ -342,6 +342,25 @@ failed_mount:
     return fr;
 }
 
+FRESULT storage_unmount_sdcard(DISK_NUMBER number)
+{
+    FRESULT fr = FR_DISK_ERR;
+    char cFileName[50];
+    sprintf(cFileName, "%d:", number);
+    fr = f_unmount(number, cFileName, 1);
+    if (fr != FR_OK)
+    {
+        LOGI("f_mount failed:%d\r\n", fr);
+    }
+    else
+    {
+        LOGI("f_mount OK!\r\n");
+    }
+
+    return fr;
+}
+
+
 static bk_err_t storage_save_first_frame(frame_buffer_t *frame)
 {
 #if (CONFIG_FATFS)
@@ -356,7 +375,7 @@ static bk_err_t storage_save_first_frame(frame_buffer_t *frame)
 	if (fr != FR_OK)
 	{
 		LOGE("can not open file: %s, error: %d\n", file_name, fr);
-        fr = stroage_mount_sdcard(DISK_NUMBER_SDIO_SD);
+        fr = storage_mount_sdcard(DISK_NUMBER_SDIO_SD);
         if (fr != FR_OK)
         {
             LOGE("f_mount failed:%d\r\n", fr);
@@ -663,6 +682,7 @@ static bk_err_t storage_save_video_exit_handle(void)
 
     if (pfs != NULL)
     {
+        storage_unmount_sdcard(DISK_NUMBER_SDIO_SD);
         os_free(pfs);
         pfs = NULL;
     }
@@ -721,10 +741,7 @@ void storage_app_set_new_file(void *param)
 bk_err_t storage_app_set_frame_auto(uint32_t cycle_count, uint32_t cycle_time)
 {
 	int ret = BK_OK;
-	char file_name[50] = {0};
-    os_memset(file_name, 0, 50);
-    sprintf(file_name, "%d:", DISK_NUMBER_SDIO_SD);
-    FRESULT fr = stroage_mount_sdcard(DISK_NUMBER_SDIO_SD);
+    FRESULT fr = storage_mount_sdcard(DISK_NUMBER_SDIO_SD);
     if (fr != FR_OK)
     {
         LOGE("f_mount failed:%d\r\n", fr);
