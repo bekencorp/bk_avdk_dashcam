@@ -91,7 +91,7 @@ static void software_decoder_task_entry(beken_thread_arg_t data)
 		}
 
 		dec_frame->type = jpeg_frame->type;
-		dec_frame->fmt = PIXEL_FMT_YUYV;
+		dec_frame->fmt = PIXEL_FMT_RGB565;
 		dec_frame->sequence = jpeg_frame->sequence;
 		dec_frame->width = jpeg_frame->width;
 		dec_frame->height = jpeg_frame->height;

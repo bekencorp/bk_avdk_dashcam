@@ -229,6 +229,21 @@ static bk_err_t jpeg_decode_frame(frame_buffer_t *in_frame, frame_buffer_t *out_
 		}
 	}
 #endif
+	JD_FORMAT_OUTPUT format;
+	switch (out_frame->fmt)
+	{
+		case PIXEL_FMT_YUYV:
+			format = JD_FORMAT_YUYV;
+			break;
+		case PIXEL_FMT_RGB565:
+			format = JD_FORMAT_RGB565;
+			break;
+		default:
+			format = JD_FORMAT_YUYV;
+			break;
+	}
+
+	jd_set_format(format);
 
 	jd_set_rotate(sw_dec_config->rotate_angle, sw_dec_config->rotate_buffer);
 	if (sw_dec_config->rotate_angle == ROTATE_90 || sw_dec_config->rotate_angle == ROTATE_270)
