@@ -49,7 +49,7 @@ extern u64 riscv_get_mtimer(void);
 
 #define SECTOR                  0x1000
 
-#define LOGI(...) BK_LOGW(TAG, ##__VA_ARGS__)
+#define LOGI(...) BK_LOGI(TAG, ##__VA_ARGS__)
 #define LOGW(...) BK_LOGW(TAG, ##__VA_ARGS__)
 #define LOGE(...) BK_LOGE(TAG, ##__VA_ARGS__)
 #define LOGD(...) BK_LOGD(TAG, ##__VA_ARGS__)
@@ -111,7 +111,7 @@ static void storage_capture_save(frame_buffer_t *frame)
 	bk_err_t ret;
 	if (frame == NULL)
 	{
-		LOGI("jpeg frame = NULL \n");
+		LOGE("jpeg frame = NULL \n");
 		return;
 	}
 	bk_logic_partition_t *pt = bk_flash_partition_get_info(BK_PARTITION_USR_CONFIG);
@@ -146,7 +146,7 @@ static void storage_capture_save(frame_buffer_t *frame)
 bk_err_t sdcard_read_filelen(char *filename)
 {
     int ret = BK_FAIL;
-    os_printf("Not support\r\n");
+    LOGE("Not support\r\n");
     ret = BK_ERR_NOT_SUPPORT;
     return ret;
 }
@@ -271,14 +271,14 @@ static bk_err_t storage_save_frame(frame_buffer_t *frame)
 	int fd;
 	int ret = BK_OK;
 	char file_name[FILENAME_MAX_LEN] = {0};
-	LOGI("%s %d %d %s\n", __func__, __LINE__, frame->sequence, capture_name);
+	LOGD("%s %d %d %s\n", __func__, __LINE__, frame->sequence, capture_name);
 
 	sprintf(file_name, "%s/%s", STORAGE_MOUNT_PATH, capture_name);
 
 	fd = open(file_name, O_WRONLY | O_APPEND);
 	if (fd == -1)
 	{
-		LOGE("can not open file: %s, error: %d\n", file_name, fd);
+		LOGE("%s %d can not open file: %s, error: %d\n", __func__, __LINE__, file_name+1, fd);
 		return BK_FAIL;
 	}
 
@@ -296,14 +296,14 @@ static bk_err_t storage_save_first_frame(frame_buffer_t *frame)
 	int fd;
 	int ret = BK_OK;
 	char file_name[FILENAME_MAX_LEN] = {0};
-	LOGI("%s %d %d %s\n", __func__, __LINE__, frame->sequence, capture_name);
+	LOGW("%s %d %d %s\n", __func__, __LINE__, frame->sequence, capture_name);
 
 	sprintf(file_name, "%s/%s", STORAGE_MOUNT_PATH, capture_name);
 
 	fd = open(file_name, O_WRONLY | O_TRUNC);
 	if (fd == -1)
 	{
-		LOGE("can not open file: %s, error: %d\n", file_name+1, fd);
+		LOGE("%s %d can not open file: %s, error: %d\n", __func__, __LINE__, file_name+1, fd);
 		ret = storage_mount_sdcard();
 		if (ret != BK_OK)
 		{
@@ -312,11 +312,11 @@ static bk_err_t storage_save_first_frame(frame_buffer_t *frame)
 		}
 		else
 		{
-			LOGE("f_mount OK!\r\n");
+			LOGW("f_mount OK!\r\n");
 			fd = open(file_name, O_RDWR | O_CREAT);
 			if (fd != -1)
 			{
-				LOGE("can not open file: %s, error: %d\n", file_name+1, fd);
+				LOGE("%s %d can not open file: %s, error: %d\n", __func__, __LINE__, file_name+1, fd);
 				return BK_FAIL;
 			}
 		}
@@ -344,7 +344,7 @@ bk_err_t sdcard_read_filelen(char *filename)
     do{
         if(!filename)
         {
-            os_printf("%s param is null\r\n", __FUNCTION__);
+            LOGE("%s param is null\r\n", __FUNCTION__);
             ret = BK_ERR_PARAM;
             break;
         }
@@ -355,7 +355,7 @@ bk_err_t sdcard_read_filelen(char *filename)
         fr = f_open(&file, cFileName, FA_OPEN_EXISTING | FA_READ);
         if (fr != FR_OK) 
         {
-            os_printf("open %s fail.\r\n", filename);
+            LOGE("open %s fail.\r\n", filename);
             ret = BK_ERR_OPEN;
             break;
         }
@@ -364,7 +364,7 @@ bk_err_t sdcard_read_filelen(char *filename)
         f_close(&file);
     }while(0);
 #else
-    os_printf("Not support\r\n");
+    LOGE("Not support\r\n");
     ret = BK_ERR_NOT_SUPPORT;
 #endif
 
@@ -531,11 +531,11 @@ FRESULT storage_mount_sdcard(DISK_NUMBER number)
     }
     else
     {
-        LOGI("f_mount OK!\r\n");
+        LOGW("f_mount OK!\r\n");
     }
 
 failed_mount:
-    LOGI("----- test_mount %d over  -----\r\n\r\n", number);
+    LOGE("----- test_mount %d over  -----\r\n\r\n", number);
     return fr;
 }
 
@@ -547,11 +547,11 @@ FRESULT storage_unmount_sdcard(DISK_NUMBER number)
     fr = f_unmount(number, cFileName, 1);
     if (fr != FR_OK)
     {
-        LOGI("f_mount failed:%d\r\n", fr);
+        LOGE("f_mount failed:%d\r\n", fr);
     }
     else
     {
-        LOGI("f_mount OK!\r\n");
+        LOGW("f_mount OK!\r\n");
     }
 
     return fr;
@@ -563,7 +563,7 @@ static bk_err_t storage_save_first_frame(frame_buffer_t *frame)
 	FIL fp1;
 	unsigned int uiTemp = 0;
 	char file_name[50] = {0};
-    LOGI("%s %d %d %s\n", __func__, __LINE__, frame->sequence, capture_name);
+	LOGW("%s %d %d %s\n", __func__, __LINE__, frame->sequence, capture_name);
 
 	sprintf(file_name, "%d:/%s", DISK_NUMBER_SDIO_SD, capture_name);
 
@@ -579,7 +579,7 @@ static bk_err_t storage_save_first_frame(frame_buffer_t *frame)
         }
         else
         {
-            LOGE("f_mount OK!\r\n");
+            LOGW("f_mount OK!\r\n");
             os_memset(file_name, 0, 50);
             sprintf(file_name, "%d:/%s", DISK_NUMBER_SDIO_SD, capture_name);
             fr = f_open(&fp1, file_name, FA_CREATE_ALWAYS | FA_WRITE);
@@ -702,7 +702,7 @@ static void storage_app_task_entry(beken_thread_arg_t data)
 
 exit:
 
-	LOGI("storage_app_task exit\r\n");
+	LOGW("storage_app_task exit\r\n");
 
 	if (capture_name)
 	{
@@ -779,13 +779,13 @@ static bk_err_t storage_capture_notify_handle(media_mailbox_msg_t *msg)
 
 	if (storage_app_info.capture_state == STORAGE_STATE_ENABLED)
 	{
-		LOGI("%s already capture\n", __func__);
+		LOGE("%s already capture\n", __func__);
 		goto error;
 	}
 
 	if (capture_name == NULL)
 	{
-		LOGI("%s capture name not init\n", __func__);
+		LOGE("%s capture name not init\n", __func__);
 		ret = BK_ERR_PATH;
 		goto error;
 	}
@@ -813,14 +813,14 @@ static bk_err_t storage_save_all_notify_handle(media_mailbox_msg_t *msg)
 
 	if (storage_app_info.state == STORAGE_STATE_DISABLED)
 	{
-		LOGI("%s storage app task not start\n", __func__);
+		LOGE("%s storage app task not start\n", __func__);
 		ret = BK_ERR_NOT_INIT;
 		goto error;
 	}
 
 	if (capture_name == NULL)
 	{
-		LOGI("%s capture name not init\n", __func__);
+		LOGE("%s capture name not init\n", __func__);
 		ret = BK_ERR_PATH;
 		goto error;
 	}
@@ -835,7 +835,7 @@ static bk_err_t storage_save_all_notify_handle(media_mailbox_msg_t *msg)
 	}
 	else
 	{
-		LOGI("storage app task is saving, cannot change frame node\r\n");
+		LOGE("storage app task is saving, cannot change frame node\r\n");
 		goto error;
 	}
 
@@ -853,11 +853,11 @@ static bk_err_t storage_save_video_exit_handle(void)
 {
 	int ret = BK_OK;
 
-	LOGI("%s\n", __func__);
+	LOGW("%s\n", __func__);
 
 	if (storage_app_info.capture_state == STORAGE_STATE_DISABLED)
 	{
-		LOGE("%s already exit\n", __func__);
+		LOGW("%s already exit\n", __func__);
 		return ret;
 	}
 	else
@@ -895,11 +895,11 @@ bk_err_t storage_app_task_open_handle(void)
 {
 	int ret = BK_OK;
 
-	LOGI("%s\n", __func__);
+	LOGW("%s\n", __func__);
 
 	if (get_storage_state() == STORAGE_STATE_ENABLED)
 	{
-		LOGI("%s already opened!\n", __func__);
+		LOGW("%s already opened!\n", __func__);
 		return ret;
 	}
 
@@ -925,7 +925,7 @@ bk_err_t storage_app_task_close_handle(void)
 
 	if (storage_app_info.state == STORAGE_STATE_DISABLED)
 	{
-		LOGI("%s already close\n", __func__);
+		LOGW("%s already close\n", __func__);
 		return ret;
 	}
 
@@ -951,7 +951,7 @@ bk_err_t storage_app_set_frame_auto(uint32_t cycle_count, uint32_t cycle_time)
     }
     else
     {
-        LOGE("f_mount OK!\r\n");
+        LOGW("f_mount OK!\r\n");
     }
 #else
     FRESULT fr = storage_mount_sdcard(DISK_NUMBER_SDIO_SD);
@@ -961,7 +961,7 @@ bk_err_t storage_app_set_frame_auto(uint32_t cycle_count, uint32_t cycle_time)
     }
     else
     {
-        LOGE("f_mount OK!\r\n");
+        LOGW("f_mount OK!\r\n");
     }
 #endif
     storage_app_set_frame_name("auto_0.h264");
