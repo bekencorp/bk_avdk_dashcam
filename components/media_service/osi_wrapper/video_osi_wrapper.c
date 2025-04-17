@@ -11,8 +11,12 @@
 
 #include <setjmp.h>
 
-#if CONFIG_FATFS
+#if (CONFIG_FATFS) && (!CONFIG_VFS)
 #include "ff.h"
+#endif
+
+#if CONFIG_VFS
+#include "bk_posix.h"
 #endif
 
 extern bk_err_t video_osi_funcs_init(void *config);
@@ -20,11 +24,6 @@ extern bk_err_t video_osi_funcs_init(void *config);
 static void *malloc_wrapper(size_t size)
 {
 	return os_malloc(size);
-}
-
-static void free_wrapper(void *ptr)
-{
-	os_free(ptr);
 }
 
 static void *zalloc_wrapper(size_t num, size_t size)
@@ -35,6 +34,26 @@ static void *zalloc_wrapper(size_t num, size_t size)
 static void *realloc_wrapper(void *old_mem, size_t size)
 {
 	return os_realloc(old_mem, size);
+}
+
+static void *psram_malloc_wrapper(size_t size)
+{
+	return psram_malloc(size);
+}
+
+static void *psram_zalloc_wrapper(size_t num, size_t size)
+{
+	return psram_zalloc(num * size);
+}
+
+static void *psram_realloc_wrapper(void *old_mem, size_t size)
+{
+	return bk_psram_realloc(old_mem, size);
+}
+
+static void free_wrapper(void *ptr)
+{
+	os_free(ptr);
 }
 
 static void *memcpy_wrapper(void *out, const void *in, uint32_t n)
@@ -61,76 +80,126 @@ static uint32_t get_time_wrapper(void)
 	return rtos_get_time();
 }
 
-static uint32_t f_open_wrapper(void **fp, const void *path, uint8_t mode)
+static int f_open_wrapper(void **fp, const void *path, uint8_t mode)
 {
-#if CONFIG_FATFS
+#if (CONFIG_FATFS) && (!CONFIG_VFS)
 	*fp = os_malloc(sizeof(FIL));
 	return f_open((FIL *)*fp, (char *)path, mode);
+#elif (CONFIG_VFS)
+	uint32_t flags = 0;
+
+	if (mode == 0x01)
+	{
+		flags = O_RDONLY;
+	}
+	else if (mode == 0x02)
+	{
+		flags = O_WRONLY;
+	}
+	else if(mode == (0x01 | 0x02))
+	{
+		flags = O_RDWR;
+	} else if (mode == (0x01 | 0x02 |
+ 0x08))
+	{
+		flags = O_CREAT | O_RDWR;
+	}
+
+	int f = open(path, flags);
+	if (f < 0) {
+		*fp = NULL;
+		return -1;
+	} else {
+		*fp = (void *)f;
+		return 0;
+	}
 #else
 	return -1;
 #endif
 }
 
-static uint32_t f_close_wrapper(void *fp)
+static int f_close_wrapper(void *fp)
 {
-#if CONFIG_FATFS
+#if (CONFIG_FATFS) && (!CONFIG_VFS)
 	FRESULT ret = FR_OK;
 	ret = f_close((FIL *)fp);
 	os_free(fp);
 	return ret;
-
+#elif (CONFIG_VFS)
+	int ret = close((int)fp);
+	return ret < 0 ? -1 : 0;
 #else
 	return -1;
 #endif
 }
 
-static uint32_t f_write_wrapper(void *fp, const void *buff, uint32_t btw, uint32_t *bw)
+static int f_write_wrapper(void *fp, const void *buff, uint32_t btw, uint32_t *bw)
 {
-#if CONFIG_FATFS
+#if (CONFIG_FATFS) && (!CONFIG_VFS)
 	return f_write((FIL *)fp, (void *)buff, (UINT)btw, (UINT *)bw);
+#elif (CONFIG_VFS)
+	*bw = write((int)fp, (void *)buff, btw);
+	return *bw < 0 ? -1 : 0;
 #else
 	return -1;
 #endif
 }
 
-static uint32_t f_read_wrapper(void *fp, const void *buff, uint32_t btr, uint32_t *br)
+static int f_read_wrapper(void *fp, const void *buff, uint32_t btr, uint32_t *br)
 {
-#if CONFIG_FATFS
+#if (CONFIG_FATFS) && (!CONFIG_VFS)
 	return f_read((FIL *)fp, (void *)buff, (UINT)btr, (UINT *)br);
+#elif (CONFIG_VFS)
+	*br = read((int)fp, (void *)buff, btr);
+	return *br < 0 ? -1 : 0;
 #else
 	return -1;
 #endif
 }
 
-static uint32_t f_lseek_wrapper(void *fp, uint32_t ofs)
+static int f_lseek_wrapper(void *fp, uint32_t ofs, uint32_t whence)
 {
-#if CONFIG_FATFS
-	return f_lseek((FIL *)fp, (FSIZE_t)ofs);
+#if (CONFIG_FATFS) && (!CONFIG_VFS)
+	if (whence == SEEK_SET) {
+		return f_lseek((FIL *)fp, (FSIZE_t)ofs);
+	} else if (whence == SEEK_CUR) {
+		return f_lseek((FIL *)fp, f_tell((FIL *)fp) + (FSIZE_t)ofs);
+	} else if (whence == SEEK_END) {
+		return f_lseek((FIL *)fp, f_size((FIL *)fp) + (FSIZE_t)ofs);
+	} else {
+		return -1;
+	}
+#elif (CONFIG_VFS)
+	return lseek((int)fp, ofs, whence);
 #else
 	return -1;
 #endif
 }
 
-static uint32_t f_tell_wrapper(void *fp)
+static int f_tell_wrapper(void *fp)
 {
-#if CONFIG_FATFS
+#if (CONFIG_FATFS) && (!CONFIG_VFS)
 	FIL *tmp_fp = (FIL *)fp;
 	return f_tell(tmp_fp);
+#elif (CONFIG_VFS)
+	return (uint32_t)lseek((int)fp, 0, SEEK_CUR);
 #else
 	return -1;
 #endif
 }
 
-static uint32_t f_size_wrapper(void *fp)
+static int f_size_wrapper(void *fp)
 {
-#if CONFIG_FATFS
+#if (CONFIG_FATFS) && (!CONFIG_VFS)
 	FIL *tmp_fp = (FIL *)fp;
 	return f_size(tmp_fp);
+#elif (CONFIG_VFS)
+	os_printf("Not support yet, please use the stats function!!!\r\n");
+	return -1;
 #else
 	return -1;
 #endif
 }
-
 
 static uint32_t get_avi_index_start_addr_wrapper(void)
 {
@@ -145,14 +214,17 @@ static uint32_t get_avi_index_count_wrapper(void)
 static bk_video_osi_funcs_t video_osi_funcs =
 {
 	.malloc = malloc_wrapper,
-	.free = free_wrapper,
 	.zalloc = zalloc_wrapper,
 	.realloc = realloc_wrapper,
+	.psram_malloc = psram_malloc_wrapper,
+	.psram_zalloc = psram_zalloc_wrapper,
+	.psram_realloc = psram_realloc_wrapper,
+	.free = free_wrapper,
 	.memcpy = memcpy_wrapper,
 	.memcpy_word = memcpy_word_wrapper,
 
 	.log_write = bk_printf_ext,
-	.assert = assert_wrapper,
+	.osi_assert = assert_wrapper,
 	.get_time = get_time_wrapper,
 
 	.f_open = f_open_wrapper,

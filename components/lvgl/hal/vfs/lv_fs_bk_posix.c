@@ -27,7 +27,7 @@
 
 #define LV_FS_BK_POSIX_LETTER        '/'
 #define LV_FS_BK_POSIX_PATH          ""
-#define LV_FS_BK_POSIX_CACHE_SIZE       0 
+#define LV_FS_BK_POSIX_CACHE_SIZE    0
 
 /**********************
  *      TYPEDEFS

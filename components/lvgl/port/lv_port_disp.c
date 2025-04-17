@@ -118,8 +118,13 @@ int lv_port_disp_init(void)
     /* Example for 2) */
     static lv_disp_draw_buf_t draw_buf_dsc_2;
 
+#if CONFIG_LVGL_USE_TRIPLE_BUFFERS
+    LOGI("LVGL addr1:%x, addr2:%x, pixel size:%d, fb1:%x, fb2:%x, fb3:%x\r\n", vendor_config.draw_buf_2_1, vendor_config.draw_buf_2_2,
+                                        vendor_config.draw_pixel_size, vendor_config.frame_buf_1, vendor_config.frame_buf_2, vendor_config.frame_buf_3);
+#else
     LOGI("LVGL addr1:%x, addr2:%x, pixel size:%d, fb1:%x, fb2:%x\r\n", vendor_config.draw_buf_2_1, vendor_config.draw_buf_2_2,
-                                        vendor_config.draw_pixel_size, vendor_config.frame_buf_1, vendor_config.frame_buf_2);
+                                    vendor_config.draw_pixel_size, vendor_config.frame_buf_1, vendor_config.frame_buf_2);
+#endif
 
     lv_disp_draw_buf_init(&draw_buf_dsc_2, vendor_config.draw_buf_2_1, vendor_config.draw_buf_2_2, vendor_config.draw_pixel_size);   /*Initialize the display buffer*/
 
@@ -313,6 +318,14 @@ static void lv_dma2d_memcpy_last_frame(void *Psrc, void *Pdst, uint32_t xsize, u
     lv_dma2d_use_flag = 1;
 }
 
+void lv_dma2d_stop_memcpy_last_frame(void)
+{
+    if (lv_dma2d_use_flag) {
+        bk_dma2d_stop_transfer();
+        lv_dma2d_use_flag = 0;
+    }
+}
+
 static void lv_dma2d_memcpy_draw_buffer(void *Psrc, uint32_t src_xsize, uint32_t src_ysize, void *Pdst, uint32_t dst_xpos, uint32_t dst_ypos)
 {
     lv_dma2d_memcpy_wait_transfer_finish();
@@ -489,11 +502,16 @@ static void disp_flush(lv_disp_drv_t * disp_drv, const lv_area_t * area, lv_colo
 {
 #if (!LVGL_USE_PSRAM)
     if (disp_flush_enabled) {
+        static uint8_t disp_buff_index = DISPLAY_BUFFER_1;
         lv_color_t *color_ptr = color_p;
-        static lv_color_t *disp_buf = NULL;
-        static u8 disp_buff_index = DISPLAY_BUFFER_DEF;
+        lv_color_t *disp_buf = NULL;
+        lv_color_t *copy_buf = NULL;
         lv_color_t *disp_buf1 = vendor_config.frame_buf_1;
         lv_color_t *disp_buf2 = vendor_config.frame_buf_2;
+
+        #if CONFIG_LVGL_USE_TRIPLE_BUFFERS
+        lv_color_t *disp_buf3 = vendor_config.frame_buf_3;
+        #endif
 
         lv_coord_t lv_hor = LV_HOR_RES;
         lv_coord_t lv_ver = LV_VER_RES;
@@ -501,18 +519,26 @@ static void disp_flush(lv_disp_drv_t * disp_drv, const lv_area_t * area, lv_colo
         lv_coord_t height = lv_area_get_height(area);
 
         if (disp_buf2 != NULL) {
-            if(DISPLAY_BUFFER_1 == disp_buff_index) {
-                lv_dma2d_memcpy_wait_transfer_finish();
+            lv_dma2d_memcpy_wait_transfer_finish();
+            if (DISPLAY_BUFFER_1 == disp_buff_index) {
+                disp_buf = disp_buf1;
+                copy_buf = disp_buf2;
+            }
+        #if CONFIG_LVGL_USE_TRIPLE_BUFFERS
+            else if (DISPLAY_BUFFER_2 == disp_buff_index) {
                 disp_buf = disp_buf2;
-            } else if (DISPLAY_BUFFER_2 == disp_buff_index) {
-                lv_dma2d_memcpy_wait_transfer_finish();
-                disp_buf = disp_buf1;
+                copy_buf = disp_buf3;
             }
-            else //first display
-            {
-                lv_dma2d_memcpy_wait_transfer_finish();
-                disp_buf = disp_buf1;
+            else if (DISPLAY_BUFFER_3 == disp_buff_index) {
+                disp_buf = disp_buf3;
+                copy_buf = disp_buf1;
             }
+        #else
+            else if (DISPLAY_BUFFER_2 == disp_buff_index) {
+                disp_buf = disp_buf2;
+                copy_buf = disp_buf1;
+            }
+        #endif
         } else {
             disp_buf = disp_buf1;
         }
@@ -578,28 +604,32 @@ static void disp_flush(lv_disp_drv_t * disp_drv, const lv_area_t * area, lv_colo
             #elif (CONFIG_LCD_SPI_DISPLAY)
                 lcd_spi_display_frame((uint8_t *)disp_buf, lv_hor, lv_ver);
             #else
-            lvgl_frame_buffer->frame = (uint8_t *)disp_buf;
-            #if (!CONFIG_LV_USE_DEMO_BENCHMARK)
-                if (lv_vendor_draw_buffer_cnt() == 2) {
-                    lv_dma2d_memcpy_wait_transfer_finish();
-                }
-            #endif
-            lcd_display_frame_request(lvgl_frame_buffer);
+                lvgl_frame_buffer->frame = (uint8_t *)disp_buf;
+                #if (!CONFIG_LV_USE_DEMO_BENCHMARK)
+                    if (lv_vendor_draw_buffer_cnt() == 2) {
+                        lv_dma2d_memcpy_wait_transfer_finish();
+                    }
+                #endif
+                lcd_display_frame_request(lvgl_frame_buffer);
             #endif
 
             if(disp_buf2) {
+                lv_dma2d_memcpy_last_frame(disp_buf, copy_buf, lv_hor, lv_ver, 0, 0);
                 if (DISPLAY_BUFFER_1 == disp_buff_index) {
-                    lv_dma2d_memcpy_last_frame(disp_buf, disp_buf1, lv_hor, lv_ver, 0, 0);
-                    disp_buff_index = 2;
-                } else if (DISPLAY_BUFFER_2 == disp_buff_index) {
-                    lv_dma2d_memcpy_last_frame(disp_buf, disp_buf2, lv_hor, lv_ver, 0, 0);
-                    disp_buff_index = 1;
+                    disp_buff_index = DISPLAY_BUFFER_2;
                 }
-                else //first display
-                {
-                    lv_dma2d_memcpy_last_frame(disp_buf, disp_buf2, lv_hor, lv_ver, 0, 0);
-                    disp_buff_index = 2;
+            #if CONFIG_LVGL_USE_TRIPLE_BUFFERS
+                else if (DISPLAY_BUFFER_2 == disp_buff_index) {
+                    disp_buff_index = DISPLAY_BUFFER_3;
                 }
+                else if (DISPLAY_BUFFER_3 == disp_buff_index) {
+                    disp_buff_index = DISPLAY_BUFFER_1;
+                }
+            #else
+                else if (DISPLAY_BUFFER_2 == disp_buff_index) {
+                    disp_buff_index = DISPLAY_BUFFER_1;
+                }
+            #endif
             }
         }
     }
@@ -612,7 +642,8 @@ static void disp_flush(lv_disp_drv_t * disp_drv, const lv_area_t * area, lv_colo
         #if LVGL_USE_DIRECT_MODE
             if (lv_disp_flush_is_last(disp_drv)) {
                 media_debug->lvgl_draw++;
-                lcd_display_frame_request(lvgl_frame_buffer);
+                extern bk_err_t lcd_display_frame(frame_buffer_t *frame);
+                lcd_display_frame(lvgl_frame_buffer);
                 update_dual_buffer_with_direct_mode(disp_drv, area, (lv_color_t *)color_p);
             }
         #else

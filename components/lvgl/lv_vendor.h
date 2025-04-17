@@ -26,11 +26,16 @@ typedef struct {
 
     lv_color_t *frame_buf_1;
     lv_color_t *frame_buf_2;
+#if CONFIG_LVGL_USE_TRIPLE_BUFFERS
+    lv_color_t *frame_buf_3;
+#endif
     uint32_t draw_pixel_size;
     media_rotate_t rotation;
 } lv_vnd_config_t;
 
 
+void lv_vendor_fs_init(void);
+void lv_vendor_fs_deinit(void);
 void lv_vendor_init(lv_vnd_config_t *config);
 void lv_vendor_deinit(void);
 void lv_vendor_start(void);

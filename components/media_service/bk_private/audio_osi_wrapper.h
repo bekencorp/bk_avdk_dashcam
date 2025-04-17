@@ -19,7 +19,7 @@ typedef struct
 	void (* memset_word)(void *b, int32_t c, uint32_t n);
 
 	void (* log_write)(int level, char *tag, const char *fmt, ...);
-	void (* assert)(uint8_t expr, char *expr_s, const char *func);
+	void (* osi_assert)(uint8_t expr, char *expr_s, const char *func);
 	uint32_t (* get_time)(void);
 } bk_audio_osi_funcs_t;
 

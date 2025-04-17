@@ -98,7 +98,7 @@ static bk_audio_osi_funcs_t audio_osi_funcs =
 	.memset_word = memset_word_wrapper,
 
 	.log_write = bk_printf_ext,
-	.assert = assert_wrapper,
+	.osi_assert = assert_wrapper,
 	.get_time = get_time_wrapper,
 };
 

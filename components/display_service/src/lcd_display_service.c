@@ -192,7 +192,7 @@ __attribute__((section(".itcm_sec_code"))) static void lcd_driver_display_rgb_is
     DISPLAY_ISR_END();
 }
 
-static bk_err_t lcd_display_frame(frame_buffer_t *frame)
+bk_err_t lcd_display_frame(frame_buffer_t *frame)
 {
 	bk_err_t ret = BK_FAIL;
 	DISPLAY_START();
